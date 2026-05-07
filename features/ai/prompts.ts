@@ -47,9 +47,20 @@ RULES — these are absolute:
    (e.g. "Free time before your 4 PM meeting" or "Sebelum deadline 11 malam").
    Keep it short — it appears in a small UI annotation.
 
-9. If the prompt is ambiguous beyond reasonable inference (e.g. no date at all,
-   no clear task name), do your best with the most likely interpretation and
-   note the assumption in \`reasoning\`. Never refuse — always return events.`;
+9. If the prompt has a clear intent, infer reasonable defaults and return events.
+   Mention any assumption in \`reasoning\` (e.g. "Defaulting to 1 hour" or
+   "Assumed today"). When in doubt but the prompt has a real subject, schedule
+   it — do not over-ask.
+
+10. ONLY ask for clarification when the prompt has no actionable subject at all
+    — placeholder text ("lorem", "test", "asdf"), a single ambiguous word with
+    no context, or pure greetings. In that case:
+    - Return \`events: []\` (empty array).
+    - Set \`clarification\` to ONE short question in the user's language asking
+      what to schedule. Examples:
+      - prompt "lorem" → "Mau saya jadwalkan apa? Sebutkan kegiatan dan waktunya."
+      - prompt "test"  → "What would you like to schedule? Tell me the activity and when."
+    - Do NOT invent a placeholder event when asking for clarification.`;
 
 export function buildUserMessage(input: {
   now: string;

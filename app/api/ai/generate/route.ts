@@ -101,7 +101,12 @@ export async function POST(req: Request) {
       (e?.kind === "event" || e?.kind === "task"),
   );
 
-  if (validEvents.length === 0) {
+  const clarification =
+    typeof parsed.clarification === "string" && parsed.clarification.trim()
+      ? parsed.clarification.trim()
+      : null;
+
+  if (validEvents.length === 0 && !clarification) {
     return NextResponse.json(
       { error: "AI returned no valid events" },
       { status: 502 },
@@ -110,7 +115,8 @@ export async function POST(req: Request) {
 
   const userId = session.user.id;
   const assistantContent =
-    validEvents[0].reasoning ??
+    clarification ??
+    validEvents[0]?.reasoning ??
     `Created ${validEvents.length} item${validEvents.length === 1 ? "" : "s"}.`;
 
   const userMsgId = crypto.randomUUID();
@@ -133,6 +139,8 @@ export async function POST(req: Request) {
       content: assistantContent,
       createdAt: new Date(now.getTime() + 1),
     });
+
+    if (validEvents.length === 0) return [];
 
     const rows = validEvents.map((e) => ({
       id: crypto.randomUUID(),

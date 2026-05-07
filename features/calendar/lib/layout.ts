@@ -12,18 +12,83 @@ export type EventPosition = {
   height: number;
 };
 
+// Minimum visual height in minutes — enforces ~32px chip so the title stays
+// legible even for tasks (deadline-only events with zero duration).
+const MIN_RENDER_MINUTES = 40;
+
 export function eventToPosition(event: AnyEvent, dayStart: Date): EventPosition {
   const start = new Date(event.startsAt).getTime();
   const end = new Date(event.endsAt).getTime();
   const dayMs = dayStart.getTime();
 
   const minutesFromStart = Math.max(0, (start - dayMs) / 60000);
-  const durationMinutes = Math.max(15, (end - start) / 60000);
+  const durationMinutes = Math.max(MIN_RENDER_MINUTES, (end - start) / 60000);
 
   return {
     top: minutesFromStart * PX_PER_MINUTE,
     height: durationMinutes * PX_PER_MINUTE,
   };
+}
+
+export type LaneInfo = {
+  lane: number;
+  totalLanes: number;
+};
+
+// Greedy lane assignment for overlapping events on the same day.
+// Sort by startsAt; place each event in the first lane whose previous event
+// has already ended. After placement, propagate `totalLanes` (max overlap
+// across the cluster) to every event in that cluster.
+export function assignLanes(events: AnyEvent[]): Map<string, LaneInfo> {
+  const result = new Map<string, LaneInfo>();
+  if (events.length === 0) return result;
+
+  const sorted = events
+    .slice()
+    .sort(
+      (a, b) =>
+        new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+    );
+
+  const laneEnds: number[] = []; // end timestamp for each active lane
+  const clusterStartIdx: number[] = []; // index in `sorted` where each lane's current cluster started
+  let cluster: { ids: string[]; maxLanes: number } = { ids: [], maxLanes: 0 };
+  let clusterEnd = -Infinity;
+
+  const flushCluster = () => {
+    for (const id of cluster.ids) {
+      const info = result.get(id);
+      if (info) result.set(id, { ...info, totalLanes: cluster.maxLanes });
+    }
+    cluster = { ids: [], maxLanes: 0 };
+    clusterEnd = -Infinity;
+    laneEnds.length = 0;
+    clusterStartIdx.length = 0;
+  };
+
+  for (const event of sorted) {
+    const start = new Date(event.startsAt).getTime();
+    const end = new Date(event.endsAt).getTime();
+
+    // Cluster boundary: this event starts after the last cluster end.
+    if (start >= clusterEnd) flushCluster();
+
+    let laneIdx = laneEnds.findIndex((laneEnd) => laneEnd <= start);
+    if (laneIdx === -1) {
+      laneIdx = laneEnds.length;
+      laneEnds.push(end);
+    } else {
+      laneEnds[laneIdx] = end;
+    }
+
+    result.set(event.id, { lane: laneIdx, totalLanes: laneEnds.length });
+    cluster.ids.push(event.id);
+    cluster.maxLanes = Math.max(cluster.maxLanes, laneEnds.length);
+    clusterEnd = Math.max(clusterEnd, end);
+  }
+  flushCluster();
+
+  return result;
 }
 
 export function eventsOnDay<T extends AnyEvent>(events: T[], day: Date): T[] {
