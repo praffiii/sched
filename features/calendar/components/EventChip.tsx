@@ -2,7 +2,6 @@
 
 import { cn } from "@/lib/utils/cn";
 import { formatTimeRange } from "@/lib/utils/time";
-import { useAppStore } from "@/store/app-store";
 import type { AIPendingEvent, GCalEvent } from "@/types/events";
 
 import { ConflictIcon } from "./ConflictIcon";
@@ -28,8 +27,6 @@ export function EventChip({
   lane,
   totalLanes,
 }: EventChipProps) {
-  const openInspector = useAppStore((s) => s.openInspector);
-
   // Distribute width evenly across overlapping lanes; subtract gap between
   // lanes so chips don't visually merge into each other.
   const widthPct = 100 / totalLanes;
@@ -40,9 +37,7 @@ export function EventChip({
   const isCompact = height < 36;
 
   return (
-    <button
-      type="button"
-      onClick={() => openInspector(event.id)}
+    <div
       style={{
         top,
         height,
@@ -50,7 +45,7 @@ export function EventChip({
         width: `calc(${widthPct}% - ${GAP_PX * 2}px)`,
       }}
       className={cn(
-        "absolute z-10 overflow-hidden rounded-md border-2 border-ink text-left text-[11px] font-bold leading-tight text-ink shadow-[2px_2px_0_var(--color-ink)] transition-transform hover:-translate-x-[1px] hover:-translate-y-[1px]",
+        "absolute z-10 cursor-default select-none overflow-hidden rounded-md border-2 border-ink text-left text-[11px] font-bold leading-tight text-ink shadow-[2px_2px_0_var(--color-ink)]",
         isCompact ? "px-1.5 py-0.5" : "px-2 py-1",
         kind === "gcal" && "bg-yellow",
         kind === "pending" && "hatched-pending border-dashed",
@@ -65,6 +60,6 @@ export function EventChip({
           {formatTimeRange(event.startsAt, event.endsAt)}
         </div>
       ) : null}
-    </button>
+    </div>
   );
 }

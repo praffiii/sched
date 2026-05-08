@@ -14,8 +14,8 @@ export function ChatMessageList() {
 
   // Group pending events by the assistant message that introduced them.
   // Heuristic: attach pending event to the nearest preceding assistant
-  // message whose createdAt <= event.createdAt. If none qualifies, attach
-  // to the latest assistant message.
+  // message whose createdAt <= event.createdAt. If none qualifies, skip it
+  // in chat so legacy pending events remain calendar-only.
   const pendingByMessage = useMemo(() => {
     const map = new Map<string, AIPendingEvent[]>();
     const assistantMessages = chatHistory
@@ -28,7 +28,7 @@ export function ChatMessageList() {
 
     for (const event of aiPendingEvents) {
       const eventTime = new Date(event.createdAt).getTime();
-      let target = assistantMessages[assistantMessages.length - 1];
+      let target: (typeof assistantMessages)[number] | null = null;
       for (const msg of assistantMessages) {
         if (new Date(msg.createdAt).getTime() <= eventTime) target = msg;
       }
