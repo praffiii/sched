@@ -35,6 +35,15 @@ body {
   font-family: var(--font-hand);
 }
 
+/* AI pending event hatched pattern */
+.hatched-pending {
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--color-green-teal) 0 4px,
+    #ffffff 4px 7px
+  );
+}
+
 /* Paper texture — subtle dot pattern */
 body::before {
   content: "";

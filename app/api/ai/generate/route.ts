@@ -16,6 +16,43 @@ import { eventSchema, type GeneratedPayload } from "@/features/ai/schema";
 import type { AIPendingEvent, EventKind } from "@/types/events";
 
 const MAX_PROMPT_LENGTH = 2000;
+const RETRY_DELAY_MS = 1500;
+
+function isTransientGeminiError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { status?: number; message?: string };
+  if (e.status === 503 || e.status === 429) return true;
+  if (typeof e.message === "string" && /UNAVAILABLE|503|RESOURCE_EXHAUSTED/i.test(e.message)) {
+    return true;
+  }
+  return false;
+}
+
+async function generateWithRetry(userMessage: string) {
+  try {
+    return await genAI.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: userMessage,
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+        responseMimeType: "application/json",
+        responseJsonSchema: eventSchema,
+      },
+    });
+  } catch (err) {
+    if (!isTransientGeminiError(err)) throw err;
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+    return await genAI.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: userMessage,
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+        responseMimeType: "application/json",
+        responseJsonSchema: eventSchema,
+      },
+    });
+  }
+}
 
 export async function POST(req: Request) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -61,16 +98,7 @@ export async function POST(req: Request) {
 
   let parsed: GeneratedPayload;
   try {
-    const response = await genAI.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: userMessage,
-      config: {
-        systemInstruction: SYSTEM_PROMPT,
-        responseMimeType: "application/json",
-        responseJsonSchema: eventSchema,
-      },
-    });
-
+    const response = await generateWithRetry(userMessage);
     const raw = response.text;
     if (!raw) throw new Error("Empty response from Gemini");
     parsed = JSON.parse(raw) as GeneratedPayload;
@@ -79,9 +107,13 @@ export async function POST(req: Request) {
       `[ai/generate] gemini failure (prompt_version=${PROMPT_VERSION})`,
       err,
     );
+    const transient = isTransientGeminiError(err);
     return NextResponse.json(
-      { error: "AI generation failed" },
-      { status: 502 },
+      {
+        error: "AI generation failed",
+        transient,
+      },
+      { status: transient ? 503 : 502 },
     );
   }
 
@@ -101,7 +133,12 @@ export async function POST(req: Request) {
       (e?.kind === "event" || e?.kind === "task"),
   );
 
-  if (validEvents.length === 0) {
+  const clarification =
+    typeof parsed.clarification === "string" && parsed.clarification.trim()
+      ? parsed.clarification.trim()
+      : null;
+
+  if (validEvents.length === 0 && !clarification) {
     return NextResponse.json(
       { error: "AI returned no valid events" },
       { status: 502 },
@@ -110,12 +147,21 @@ export async function POST(req: Request) {
 
   const userId = session.user.id;
   const assistantContent =
-    validEvents[0].reasoning ??
+    clarification ??
+    validEvents[0]?.reasoning ??
     `Created ${validEvents.length} item${validEvents.length === 1 ? "" : "s"}.`;
 
   const userMsgId = crypto.randomUUID();
   const assistantMsgId = crypto.randomUUID();
   const now = new Date();
+  // Strict-monotonic timestamps: user < assistant < event.
+  // Events must be AFTER assistant so the chat-grouping logic in
+  // ChatMessageList (`msg.createdAt <= event.createdAt`) attaches each event
+  // to its own assistant message rather than always falling through to the
+  // latest one.
+  const userTs = now;
+  const assistantTs = new Date(now.getTime() + 1);
+  const eventTs = new Date(now.getTime() + 2);
 
   const inserted: AIPendingEvent[] = await db.transaction(async (tx) => {
     await tx.insert(chatMessage).values({
@@ -123,7 +169,7 @@ export async function POST(req: Request) {
       userId,
       role: "user",
       content: prompt,
-      createdAt: now,
+      createdAt: userTs,
     });
 
     await tx.insert(chatMessage).values({
@@ -131,8 +177,10 @@ export async function POST(req: Request) {
       userId,
       role: "assistant",
       content: assistantContent,
-      createdAt: new Date(now.getTime() + 1),
+      createdAt: assistantTs,
     });
+
+    if (validEvents.length === 0) return [];
 
     const rows = validEvents.map((e) => ({
       id: crypto.randomUUID(),
@@ -144,7 +192,7 @@ export async function POST(req: Request) {
       reasoning: e.reasoning ?? null,
       status: "pending" as const,
       googleEventId: null,
-      createdAt: now,
+      createdAt: eventTs,
     }));
 
     const persisted = await tx.insert(aiPendingEvent).values(rows).returning();
@@ -168,13 +216,13 @@ export async function POST(req: Request) {
       id: assistantMsgId,
       role: "assistant",
       content: assistantContent,
-      createdAt: new Date(now.getTime() + 1).toISOString(),
+      createdAt: assistantTs.toISOString(),
     },
     userMessage: {
       id: userMsgId,
       role: "user",
       content: prompt,
-      createdAt: now.toISOString(),
+      createdAt: userTs.toISOString(),
     },
   });
 }

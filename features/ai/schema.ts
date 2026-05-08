@@ -31,8 +31,13 @@ export const eventSchema = {
         required: ["title", "startsAt", "endsAt", "kind"],
       },
     },
+    clarification: {
+      type: Type.STRING,
+      description:
+        "Set ONLY when the prompt is too ambiguous to schedule. A short question in the user's language asking for the missing info. When set, `events` MUST be empty.",
+    },
   },
-  propertyOrdering: ["events"],
+  propertyOrdering: ["events", "clarification"],
   required: ["events"],
 };
 
@@ -46,4 +51,5 @@ export type GeneratedEvent = {
 
 export type GeneratedPayload = {
   events: GeneratedEvent[];
+  clarification?: string;
 };

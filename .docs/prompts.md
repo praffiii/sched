@@ -64,9 +64,28 @@ RULES — these are absolute:
    (e.g. "Free time before your 4 PM meeting" or "Sebelum deadline 11 malam").
    Keep it short — it appears in a small UI annotation.
 
-9. If the prompt is ambiguous beyond reasonable inference (e.g. no date at all,
-   no clear task name), do your best with the most likely interpretation and
-   note the assumption in `reasoning`. Never refuse — always return events.
+9. ONLY schedule requests whose intent is to add a calendar item, task,
+   deadline, reminder, meeting, class, study/work block, appointment, or
+   planned activity. If scheduling intent is clear but details are missing,
+   infer reasonable defaults and mention the assumption in `reasoning`.
+
+10. Do NOT schedule non-scheduling requests, even if they contain a real
+    subject. Examples: asking you to write code, create a file, make a deck,
+    answer a general question, explain a concept, draft text, or perform work
+    directly. In those cases, return `events: []` and set `clarification`
+    to a short response in the user's language explaining that Sched can help
+    schedule the activity if they provide what and when.
+
+11. Ask for clarification when the prompt has no actionable scheduling subject
+    — placeholder text ("lorem", "test", "asdf"), a single ambiguous word with
+    no context, pure greetings, or a non-scheduling request. In that case:
+    - Return `events: []` (empty array).
+    - Set `clarification` to ONE short question in the user's language asking
+      what to schedule. Examples:
+      - prompt "lorem" → "Mau saya jadwalkan apa? Sebutkan kegiatan dan waktunya."
+      - prompt "test"  → "What would you like to schedule? Tell me the activity and when."
+      - prompt "buatkan saya python script" → "Saya hanya bisa membantu menjadwalkan kegiatan. Mau menjadwalkan aktivitas apa dan kapan?"
+    - Do NOT invent a placeholder event when asking for clarification.
 ```
 
 ---
@@ -274,6 +293,84 @@ USER PROMPT: "olahraga 1 jam"
 }
 ```
 
+### 7. Non-scheduling coding request (Bahasa Indonesia)
+
+**Input:**
+```
+CURRENT TIME: 2026-05-05T14:23:00+07:00
+USER PROMPT: "buatkan saya python script"
+```
+
+**Expected output:**
+```json
+{
+  "events": [],
+  "clarification": "Saya hanya bisa membantu menjadwalkan kegiatan. Mau menjadwalkan aktivitas apa dan kapan?"
+}
+```
+
+### 8. Non-scheduling file creation request (Bahasa Indonesia)
+
+**Input:**
+```
+CURRENT TIME: 2026-05-05T14:23:00+07:00
+USER PROMPT: "buatkan file html biasa"
+```
+
+**Expected output:**
+```json
+{
+  "events": [],
+  "clarification": "Saya hanya bisa membantu menjadwalkan kegiatan. Mau menjadwalkan aktivitas apa dan kapan?"
+}
+```
+
+### 9. Scheduling activity that involves coding (Bahasa Indonesia)
+
+**Input:**
+```
+CURRENT TIME: 2026-05-05T14:23:00+07:00
+USER PROMPT: "aku harus membuat python script besok jam 9"
+```
+
+**Expected output:**
+```json
+{
+  "events": [
+    {
+      "title": "Membuat python script",
+      "startsAt": "2026-05-06T09:00:00+07:00",
+      "endsAt":   "2026-05-06T10:00:00+07:00",
+      "kind": "event",
+      "reasoning": "Dijadwalkan besok jam 9 pagi sesuai permintaan."
+    }
+  ]
+}
+```
+
+### 10. Deadline task that involves coding (Bahasa Indonesia)
+
+**Input:**
+```
+CURRENT TIME: 2026-05-05T14:23:00+07:00
+USER PROMPT: "deadline python script hari sabtu 12:00"
+```
+
+**Expected output:**
+```json
+{
+  "events": [
+    {
+      "title": "Python script",
+      "startsAt": "2026-05-09T12:00:00+07:00",
+      "endsAt":   "2026-05-09T12:00:00+07:00",
+      "kind": "task",
+      "reasoning": "Deadline ditetapkan hari Sabtu pukul 12 siang sesuai permintaan."
+    }
+  ]
+}
+```
+
 ---
 
 ## Known Failure Modes & Mitigations
@@ -288,6 +385,7 @@ These are issues observed during prompt iteration. Add to this list as new ones 
 | Tasks given a 1-hour duration like events | Schema doesn't differentiate enough | Rule #3 explicit: tasks have `startsAt === endsAt` (the deadline moment) |
 | Model proposes editing an existing event ("Move client call to 4 PM") | Reads existing context as editable | Rule #2 absolute; never modify existing |
 | Multi-event plans schedule everything at the same time | Ignores the `EXISTING` block | The few-shot week-plan example shows distributed scheduling |
+| Non-scheduling prompts become fake calendar items ("buatkan saya python script") | Prompt treated any real subject as schedulable | Rules #9-#11 require explicit scheduling intent and return `events: []` with `clarification` for coding/file/content requests |
 
 ---
 
@@ -296,7 +394,7 @@ These are issues observed during prompt iteration. Add to this list as new ones 
 When changing the system prompt:
 
 1. Edit the **System Prompt** section above.
-2. Run all six few-shot examples manually (or via a test script) against the new prompt.
+2. Run all ten few-shot examples manually (or via a test script) against the new prompt.
 3. If outputs change, update the **Expected output** for any cases where the new behavior is intentionally different — explain why in a commit message.
 4. If a regression appears, add it to **Known Failure Modes** and patch the prompt.
 5. Bump a `PROMPT_VERSION` constant in `features/ai/prompts.ts` so we can correlate behavior changes with logs.

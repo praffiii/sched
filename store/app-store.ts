@@ -98,7 +98,40 @@ export const useAppStore = create<AppState>((set, get) => ({
         body: JSON.stringify({ prompt, timezone }),
       });
       if (!res.ok) {
-        console.error("[store.generate] failed", await res.text());
+        const text = await res.text();
+        console.error("[store.generate] failed", text);
+
+        // Surface a transient error as an in-memory chat exchange so the
+        // user sees their prompt + an explanation instead of a silent clear.
+        // Not persisted to DB — these messages disappear on next hydrate.
+        let transient = res.status === 503;
+        try {
+          const parsed = JSON.parse(text) as { transient?: boolean };
+          if (typeof parsed.transient === "boolean") transient = parsed.transient;
+        } catch {
+          /* ignore non-JSON error bodies */
+        }
+
+        const errorContent = transient
+          ? "Sched belum bisa merespons sekarang — model sedang sibuk. Coba lagi sebentar."
+          : "Sched gagal memproses prompt ini. Coba lagi atau sederhanakan permintaannya.";
+
+        const ts = new Date();
+        const localUserMessage: ChatMessage = {
+          id: `local-user-${crypto.randomUUID()}`,
+          role: "user",
+          content: prompt,
+          createdAt: ts.toISOString(),
+        };
+        const localAssistantMessage: ChatMessage = {
+          id: `local-error-${crypto.randomUUID()}`,
+          role: "assistant",
+          content: errorContent,
+          createdAt: new Date(ts.getTime() + 1).toISOString(),
+        };
+        set((s) => ({
+          chatHistory: [...s.chatHistory, localUserMessage, localAssistantMessage],
+        }));
         return null;
       }
       const data = (await res.json()) as GenerateResponse;
