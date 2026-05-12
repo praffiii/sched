@@ -113,6 +113,7 @@ export const aiPendingEvent = pgTable(
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
     kind: text("kind", { enum: ["event", "task"] }).notNull(),
+    hasExplicitTime: boolean("has_explicit_time").default(false).notNull(),
     reasoning: text("reasoning"),
     status: text("status", { enum: ["pending", "accepted", "discarded"] })
       .default("pending")

@@ -29,7 +29,8 @@ You will receive:
 
 You must return valid JSON matching the provided schema. The JSON contains an
 `events` array; each entry is either an event (a time block) or a task (a
-deadline).
+deadline). Each entry also includes `hasExplicitTime`, which records whether
+the user explicitly mentioned a time of day.
 
 RULES — these are absolute:
 
@@ -44,39 +45,55 @@ RULES — these are absolute:
                 study sessions, classes). Default duration: 1 hour if unspecified.
    - "task"   → a deadline (assignment due, bill payment, "remind me to ..."). 
                 `startsAt` and `endsAt` should both be the deadline moment.
+                If the user gives a day/date but no time, set the task deadline
+                to 09:00 local time internally and set `hasExplicitTime: false`.
 
-4. When the user's input language is not English, write `reasoning` in their
+4. Set `hasExplicitTime: true` ONLY when the user explicitly mentions a time
+   of day, such as "9am", "13:00", "jam 9 pagi", "malam jam 8", or "noon".
+   Set `hasExplicitTime: false` when the user mentions only a day/date/deadline
+   without a time. Do not invent a visible due time when the user omitted one.
+
+5. When the user's input language is not English, write `reasoning` in their
    language. Example: an Indonesian prompt gets Indonesian reasoning.
    Timestamps stay ISO 8601 regardless of language.
 
-5. Default working hours are 9 AM–6 PM local time. Schedule events inside this
+6. Default working hours are 9 AM–6 PM local time. Schedule events inside this
    window unless the user explicitly says otherwise ("malam", "evening",
    "after dinner", a specific time).
 
-6. If a proposed event overlaps an existing calendar event, schedule it anyway
+7. If a proposed event overlaps an existing calendar event, schedule it anyway
    but mention the conflict explicitly in `reasoning`. The user will see a ⚠
    indicator and can resolve it.
 
-7. For ambiguous date references ("Tuesday", "besok", "next week"), pick the
+8. For ambiguous date references ("Tuesday", "besok", "next week"), pick the
    NEXT occurrence relative to the current local time provided. Be deterministic.
+   In Indonesian, "Minggu" with a time/deadline means Sunday, while
+   "minggu depan" means next week. Do not interpret "Minggu" as Monday.
 
-8. `reasoning` should be ONE sentence explaining why this slot was chosen
+9. When the user mentions a time of day ("jam 5", "3pm", "19:00") but does NOT
+   specify a date (no "besok", no weekday, no calendar date), default to TODAY
+   at that time. Use context to pick AM vs PM when ambiguous (e.g. "jam 5" alone
+   → 5 PM for tennis, 5 AM for a morning run). If today's specified time has
+   already passed relative to CURRENT TIME, schedule for TOMORROW at the same
+   time and explicitly note in `reasoning` that today's slot passed.
+
+10. `reasoning` should be ONE sentence explaining why this slot was chosen
    (e.g. "Free time before your 4 PM meeting" or "Sebelum deadline 11 malam").
    Keep it short — it appears in a small UI annotation.
 
-9. ONLY schedule requests whose intent is to add a calendar item, task,
+11. ONLY schedule requests whose intent is to add a calendar item, task,
    deadline, reminder, meeting, class, study/work block, appointment, or
    planned activity. If scheduling intent is clear but details are missing,
    infer reasonable defaults and mention the assumption in `reasoning`.
 
-10. Do NOT schedule non-scheduling requests, even if they contain a real
+12. Do NOT schedule non-scheduling requests, even if they contain a real
     subject. Examples: asking you to write code, create a file, make a deck,
     answer a general question, explain a concept, draft text, or perform work
     directly. In those cases, return `events: []` and set `clarification`
     to a short response in the user's language explaining that Sched can help
     schedule the activity if they provide what and when.
 
-11. Ask for clarification when the prompt has no actionable scheduling subject
+13. Ask for clarification when the prompt has no actionable scheduling subject
     — placeholder text ("lorem", "test", "asdf"), a single ambiguous word with
     no context, pure greetings, or a non-scheduling request. In that case:
     - Return `events: []` (empty array).
@@ -156,6 +173,7 @@ USER PROMPT: "Assignment Network Security, deadline Tuesday 11pm"
       "startsAt": "2026-05-12T23:00:00+07:00",
       "endsAt":   "2026-05-12T23:00:00+07:00",
       "kind": "task",
+      "hasExplicitTime": true,
       "reasoning": "Deadline set for Tuesday 11 PM as requested."
     }
   ]
@@ -179,6 +197,7 @@ USER PROMPT: "Client meeting Friday 3pm"
       "startsAt": "2026-05-08T15:00:00+07:00",
       "endsAt":   "2026-05-08T16:00:00+07:00",
       "kind": "event",
+      "hasExplicitTime": true,
       "reasoning": "1-hour block on Friday 3 PM."
     }
   ]
@@ -202,6 +221,7 @@ USER PROMPT: "Bayar listrik besok jam 10 pagi"
       "startsAt": "2026-05-06T10:00:00+07:00",
       "endsAt":   "2026-05-06T10:00:00+07:00",
       "kind": "task",
+      "hasExplicitTime": true,
       "reasoning": "Pengingat untuk besok pagi jam 10."
     }
   ]
@@ -225,6 +245,7 @@ USER PROMPT: "Aku ada UTS Kalkulus hari Kamis, butuh belajar 3 sesi @ 2 jam"
       "startsAt": "2026-05-05T19:00:00+07:00",
       "endsAt":   "2026-05-05T21:00:00+07:00",
       "kind": "event",
+      "hasExplicitTime": true,
       "reasoning": "Sesi malam hari ini, 3 hari sebelum UTS."
     },
     {
@@ -232,6 +253,7 @@ USER PROMPT: "Aku ada UTS Kalkulus hari Kamis, butuh belajar 3 sesi @ 2 jam"
       "startsAt": "2026-05-06T19:00:00+07:00",
       "endsAt":   "2026-05-06T21:00:00+07:00",
       "kind": "event",
+      "hasExplicitTime": true,
       "reasoning": "Sesi malam Rabu setelah jadwal client call."
     },
     {
@@ -239,6 +261,7 @@ USER PROMPT: "Aku ada UTS Kalkulus hari Kamis, butuh belajar 3 sesi @ 2 jam"
       "startsAt": "2026-05-07T19:00:00+07:00",
       "endsAt":   "2026-05-07T21:00:00+07:00",
       "kind": "event",
+      "hasExplicitTime": true,
       "reasoning": "Review terakhir malam sebelum UTS Kamis."
     }
   ]
@@ -264,6 +287,7 @@ USER PROMPT: "Dentist appointment tomorrow 10am, 1 hour"
       "startsAt": "2026-05-06T10:00:00+07:00",
       "endsAt":   "2026-05-06T11:00:00+07:00",
       "kind": "event",
+      "hasExplicitTime": true,
       "reasoning": "Conflicts with existing 'Client call' (9–11 AM). Consider rescheduling one."
     }
   ]
@@ -287,6 +311,7 @@ USER PROMPT: "olahraga 1 jam"
       "startsAt": "2026-05-05T17:00:00+07:00",
       "endsAt":   "2026-05-05T18:00:00+07:00",
       "kind": "event",
+      "hasExplicitTime": false,
       "reasoning": "Tidak ada tanggal disebutkan; dijadwalkan sore ini jam 5."
     }
   ]
@@ -342,6 +367,7 @@ USER PROMPT: "aku harus membuat python script besok jam 9"
       "startsAt": "2026-05-06T09:00:00+07:00",
       "endsAt":   "2026-05-06T10:00:00+07:00",
       "kind": "event",
+      "hasExplicitTime": true,
       "reasoning": "Dijadwalkan besok jam 9 pagi sesuai permintaan."
     }
   ]
@@ -365,7 +391,106 @@ USER PROMPT: "deadline python script hari sabtu 12:00"
       "startsAt": "2026-05-09T12:00:00+07:00",
       "endsAt":   "2026-05-09T12:00:00+07:00",
       "kind": "task",
+      "hasExplicitTime": true,
       "reasoning": "Deadline ditetapkan hari Sabtu pukul 12 siang sesuai permintaan."
+    }
+  ]
+}
+```
+
+### 11. Indonesian Sunday deadline
+
+**Input:**
+```
+CURRENT TIME: 2026-05-09T10:00:00+07:00
+USER PROMPT: "aku ada tugas IPA deadline minggu jam 9 pagi"
+```
+
+**Expected output:**
+```json
+{
+  "events": [
+    {
+      "title": "Tugas IPA",
+      "startsAt": "2026-05-10T09:00:00+07:00",
+      "endsAt":   "2026-05-10T09:00:00+07:00",
+      "kind": "task",
+      "hasExplicitTime": true,
+      "reasoning": "Deadline tugas IPA jatuh pada hari Minggu pukul 9 pagi."
+    }
+  ]
+}
+```
+
+### 12. Deadline without explicit time (Bahasa Indonesia)
+
+**Input:**
+```
+CURRENT TIME: 2026-05-09T10:00:00+07:00
+USER PROMPT: "aku ada tugas IPS deadline hari selasa"
+```
+
+**Expected output:**
+```json
+{
+  "events": [
+    {
+      "title": "Tugas IPS",
+      "startsAt": "2026-05-12T09:00:00+07:00",
+      "endsAt":   "2026-05-12T09:00:00+07:00",
+      "kind": "task",
+      "hasExplicitTime": false,
+      "reasoning": "Deadline tugas IPS jatuh pada hari Selasa; tidak ada jam disebutkan."
+    }
+  ]
+}
+```
+
+---
+
+### 13. Time mentioned, no date — today's slot still ahead (Bahasa Indonesia)
+
+**Input:**
+```
+CURRENT TIME: 2026-05-12T14:00:00+07:00
+USER PROMPT: "main tenis jam 5"
+```
+
+**Expected output:**
+```json
+{
+  "events": [
+    {
+      "title": "Main tenis",
+      "startsAt": "2026-05-12T17:00:00+07:00",
+      "endsAt":   "2026-05-12T18:00:00+07:00",
+      "kind": "event",
+      "hasExplicitTime": true,
+      "reasoning": "Tidak ada tanggal disebutkan; dijadwalkan hari ini jam 5 sore."
+    }
+  ]
+}
+```
+
+### 14. Time mentioned, no date — today's slot already passed (Bahasa Indonesia)
+
+**Input:**
+```
+CURRENT TIME: 2026-05-12T17:30:00+07:00
+USER PROMPT: "main tenis jam 5"
+```
+
+**Expected output:**
+```json
+{
+  "events": [
+    {
+      "title": "Main tenis",
+      "startsAt": "2026-05-13T17:00:00+07:00",
+      "endsAt":   "2026-05-13T18:00:00+07:00",
+      "kind": "event",
+      "hasExplicitTime": true,
+      "reasoning": "Jam 5 sore hari ini sudah lewat; dijadwalkan besok jam 5 sore."
     }
   ]
 }
@@ -380,12 +505,15 @@ These are issues observed during prompt iteration. Add to this list as new ones 
 | Symptom | Cause | Mitigation in prompt |
 |---|---|---|
 | Model returns timestamps in UTC instead of local tz | Gemini defaults to UTC when timezone is not stressed | Rule #1 explicitly requires local tz with offset; user message includes both `CURRENT TIME` (with offset) and `TIMEZONE` (IANA name) |
-| `reasoning` is in English even for Indonesian prompts | Model defaults to English | Rule #4 explicit + few-shot examples in Indonesian |
-| Model refuses with "I cannot determine the date" | Over-cautious refusal | Rule #9 forces a best-effort answer with assumption noted |
+| `reasoning` is in English even for Indonesian prompts | Model defaults to English | Rule #5 explicit + few-shot examples in Indonesian |
+| Model refuses with "I cannot determine the date" | Over-cautious refusal | Rule #10 forces a best-effort answer with assumption noted |
 | Tasks given a 1-hour duration like events | Schema doesn't differentiate enough | Rule #3 explicit: tasks have `startsAt === endsAt` (the deadline moment) |
 | Model proposes editing an existing event ("Move client call to 4 PM") | Reads existing context as editable | Rule #2 absolute; never modify existing |
 | Multi-event plans schedule everything at the same time | Ignores the `EXISTING` block | The few-shot week-plan example shows distributed scheduling |
-| Non-scheduling prompts become fake calendar items ("buatkan saya python script") | Prompt treated any real subject as schedulable | Rules #9-#11 require explicit scheduling intent and return `events: []` with `clarification` for coding/file/content requests |
+| Non-scheduling prompts become fake calendar items ("buatkan saya python script") | Prompt treated any real subject as schedulable | Rules #10-#12 require explicit scheduling intent and return `events: []` with `clarification` for coding/file/content requests |
+| Indonesian "Minggu" schedules Monday | Model confuses Indonesian day name with week reference, or receives contradictory local time/offset | Rule #8 explicitly defines "Minggu" as Sunday, and `formatLocalIso` must emit the correct local offset such as `+07:00` |
+| Google Calendar shows explicit-time tasks without time | Google Tasks API discards task due time | The model emits `hasExplicitTime`; explicit-time tasks are committed as Calendar events, while date-only tasks stay Google Tasks with no visible time |
+| Time mentioned but no date → schedules tomorrow instead of today | No rule telling the model to default to "today" when a time is given without a date | Rule #9 explicitly defaults to today; if today's time passed, schedule tomorrow and explain in `reasoning` |
 
 ---
 
@@ -394,7 +522,7 @@ These are issues observed during prompt iteration. Add to this list as new ones 
 When changing the system prompt:
 
 1. Edit the **System Prompt** section above.
-2. Run all ten few-shot examples manually (or via a test script) against the new prompt.
+2. Run all few-shot examples manually (or via a test script) against the new prompt.
 3. If outputs change, update the **Expected output** for any cases where the new behavior is intentionally different — explain why in a commit message.
 4. If a regression appears, add it to **Known Failure Modes** and patch the prompt.
 5. Bump a `PROMPT_VERSION` constant in `features/ai/prompts.ts` so we can correlate behavior changes with logs.

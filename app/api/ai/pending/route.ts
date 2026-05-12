@@ -30,6 +30,7 @@ export async function GET() {
     startsAt: r.startsAt.toISOString(),
     endsAt: r.endsAt.toISOString(),
     kind: r.kind as AIPendingEvent["kind"],
+    hasExplicitTime: r.hasExplicitTime,
     reasoning: r.reasoning,
     status: r.status as AIPendingEvent["status"],
     googleEventId: r.googleEventId,

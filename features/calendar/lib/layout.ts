@@ -17,11 +17,11 @@ export type EventPosition = {
 const MIN_RENDER_MINUTES = 40;
 
 export function eventToPosition(event: AnyEvent, dayStart: Date): EventPosition {
-  const start = new Date(event.startsAt).getTime();
   const end = new Date(event.endsAt).getTime();
-  const dayMs = dayStart.getTime();
+  const start = new Date(event.startsAt).getTime();
 
-  const minutesFromStart = Math.max(0, (start - dayMs) / 60000);
+  const minutesFromStart =
+    dayStart.getHours() * 60 + dayStart.getMinutes();
   const durationMinutes = Math.max(MIN_RENDER_MINUTES, (end - start) / 60000);
 
   return {
@@ -91,16 +91,53 @@ export function assignLanes(events: AnyEvent[]): Map<string, LaneInfo> {
   return result;
 }
 
-export function eventsOnDay<T extends AnyEvent>(events: T[], day: Date): T[] {
-  const dayStart = new Date(day);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(dayStart);
-  dayEnd.setDate(dayEnd.getDate() + 1);
+export function eventsOnDay<T extends AnyEvent>(
+  events: T[],
+  day: Date,
+  timezone?: string,
+): T[] {
+  const targetKey = dateKey(day);
 
   return events.filter((e) => {
-    const start = new Date(e.startsAt);
-    return start >= dayStart && start < dayEnd;
+    return dateKey(new Date(e.startsAt), timezone) === targetKey;
   });
+}
+
+export function isUntimedTask(event: AnyEvent): boolean {
+  return event.kind === "task" && event.hasExplicitTime === false;
+}
+
+export function zonedClockDate(iso: string, timezone: string): Date {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(iso));
+
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
+  const clock = new Date(0);
+  clock.setHours(Number(get("hour")), Number(get("minute")), 0, 0);
+  return clock;
+}
+
+function dateKey(date: Date, timezone?: string): string {
+  if (!timezone) {
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+    ].join("-");
+  }
+
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
 // Naive O(n²) interval intersection. Returns set of event ids in conflict.
@@ -122,4 +159,3 @@ export function detectConflicts(events: AnyEvent[]): Set<string> {
   }
   return conflicts;
 }
-

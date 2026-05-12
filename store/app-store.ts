@@ -8,20 +8,38 @@ type GenerateResponse = {
   pendingEvents: AIPendingEvent[];
   assistantMessage: ChatMessage;
   userMessage: ChatMessage;
+  timezone?: string;
+};
+
+type AcceptCalendarResponse = {
+  event: GCalEvent;
+};
+
+type AcceptTaskResponse = {
+  taskEvent: GCalEvent;
+};
+
+type CalendarEventsResponse = {
+  events: GCalEvent[];
+  timezone?: string;
 };
 
 interface AppState {
   uiMode: UIMode;
   selectedEventId: string | null;
+  calendarAnchorAt: string;
 
   chatHistory: ChatMessage[];
   calendarEvents: GCalEvent[];
   aiPendingEvents: AIPendingEvent[];
+  calendarTimezone: string;
 
   hydrated: boolean;
   generating: boolean;
+  pendingMutationIds: string[];
 
   setUIMode: (m: UIMode) => void;
+  setCalendarAnchor: (date: Date) => void;
   openInspector: (eventId: string) => void;
   closeInspector: () => void;
 
@@ -37,13 +55,18 @@ interface AppState {
 export const useAppStore = create<AppState>((set, get) => ({
   uiMode: "2B",
   selectedEventId: null,
+  calendarAnchorAt: new Date().toISOString(),
   chatHistory: [],
   calendarEvents: [],
   aiPendingEvents: [],
+  calendarTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   hydrated: false,
   generating: false,
+  pendingMutationIds: [],
 
   setUIMode: (m) => set({ uiMode: m }),
+
+  setCalendarAnchor: (date) => set({ calendarAnchorAt: date.toISOString() }),
 
   openInspector: (eventId) =>
     set({ uiMode: "inspector", selectedEventId: eventId }),
@@ -72,16 +95,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     const history = historyRes.ok
       ? ((await historyRes.json()).messages as ChatMessage[])
       : [];
-    const events = eventsRes.ok
-      ? ((await eventsRes.json()).events as GCalEvent[])
-      : [];
+    const eventsPayload = eventsRes.ok
+      ? ((await eventsRes.json()) as CalendarEventsResponse)
+      : { events: [] };
     const pending = pendingRes.ok
       ? ((await pendingRes.json()).pendingEvents as AIPendingEvent[])
       : [];
 
     set({
       chatHistory: history,
-      calendarEvents: events,
+      calendarEvents: eventsPayload.events,
+      calendarTimezone: eventsPayload.timezone ?? get().calendarTimezone,
       aiPendingEvents: pending,
       hydrated: true,
     });
@@ -138,6 +162,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       set((s) => ({
         chatHistory: [...s.chatHistory, data.userMessage, data.assistantMessage],
         aiPendingEvents: [...s.aiPendingEvents, ...data.pendingEvents],
+        calendarTimezone: data.timezone ?? s.calendarTimezone,
+        calendarAnchorAt: data.pendingEvents[0]?.startsAt ?? s.calendarAnchorAt,
       }));
       return data;
     } finally {
@@ -146,12 +172,74 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   acceptPending: async (id) => {
-    // TODO B.4: POST /api/calendar/events, then PATCH /api/ai/pending/:id status='accepted'
-    void id;
+    const pending = get().aiPendingEvents.find((event) => event.id === id);
+    if (!pending || get().pendingMutationIds.includes(id)) return;
+
+    set((s) => ({ pendingMutationIds: [...s.pendingMutationIds, id] }));
+    try {
+      const endpoint =
+        pending.kind === "task" && !pending.hasExplicitTime
+          ? "/api/tasks"
+          : "/api/calendar/events";
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pendingEventId: id }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("[store.acceptPending] failed", text);
+        return;
+      }
+
+      const createsCalendarEvent =
+        pending.kind === "event" || pending.hasExplicitTime;
+      const acceptedEvent = createsCalendarEvent
+        ? ((await res.json()) as AcceptCalendarResponse).event
+        : ((await res.json()) as AcceptTaskResponse).taskEvent;
+
+      set((s) => ({
+        aiPendingEvents: s.aiPendingEvents.filter((event) => event.id !== id),
+        calendarEvents: [...s.calendarEvents, acceptedEvent],
+        calendarAnchorAt: acceptedEvent.startsAt,
+      }));
+    } finally {
+      set((s) => ({
+        pendingMutationIds: s.pendingMutationIds.filter(
+          (pendingId) => pendingId !== id,
+        ),
+      }));
+    }
   },
 
   discardPending: async (id) => {
-    // TODO B.4: PATCH /api/ai/pending/:id status='discarded'
-    void id;
+    const pending = get().aiPendingEvents.find((event) => event.id === id);
+    if (!pending || get().pendingMutationIds.includes(id)) return;
+
+    set((s) => ({ pendingMutationIds: [...s.pendingMutationIds, id] }));
+    try {
+      const res = await fetch(`/api/ai/pending/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "discarded" }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("[store.discardPending] failed", text);
+        return;
+      }
+
+      set((s) => ({
+        aiPendingEvents: s.aiPendingEvents.filter((event) => event.id !== id),
+      }));
+    } finally {
+      set((s) => ({
+        pendingMutationIds: s.pendingMutationIds.filter(
+          (pendingId) => pendingId !== id,
+        ),
+      }));
+    }
   },
 }));
