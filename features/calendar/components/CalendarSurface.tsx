@@ -1,13 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+
+import { useAppStore } from "@/store/app-store";
 
 import { getWeekRange, shiftWeek } from "../lib/week";
 import { CalendarHeader } from "./CalendarHeader";
 import { WeekGrid } from "./WeekGrid";
 
 export function CalendarSurface() {
-  const [anchor, setAnchor] = useState<Date>(() => new Date());
+  const calendarAnchorAt = useAppStore((s) => s.calendarAnchorAt);
+  const setCalendarAnchor = useAppStore((s) => s.setCalendarAnchor);
+  const anchor = useMemo(() => {
+    const parsed = new Date(calendarAnchorAt);
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  }, [calendarAnchorAt]);
 
   const { start, end, days } = useMemo(() => getWeekRange(anchor), [anchor]);
 
@@ -16,9 +23,9 @@ export function CalendarSurface() {
       <CalendarHeader
         start={start}
         end={end}
-        onPrev={() => setAnchor((a) => shiftWeek(a, -1))}
-        onToday={() => setAnchor(new Date())}
-        onNext={() => setAnchor((a) => shiftWeek(a, 1))}
+        onPrev={() => setCalendarAnchor(shiftWeek(anchor, -1))}
+        onToday={() => setCalendarAnchor(new Date())}
+        onNext={() => setCalendarAnchor(shiftWeek(anchor, 1))}
       />
       <WeekGrid days={days} />
     </div>

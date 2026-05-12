@@ -22,13 +22,25 @@ export const eventSchema = {
             enum: ["event", "task"],
             description: "'event' = time block, 'task' = deadline moment",
           },
+          hasExplicitTime: {
+            type: Type.BOOLEAN,
+            description:
+              "True only when the user explicitly mentioned a time of day such as 9am, 13:00, pagi jam 9, malam jam 8. False when only a date/day/deadline is mentioned.",
+          },
           reasoning: {
             type: Type.STRING,
             description: "One sentence explaining the slot choice",
           },
         },
-        propertyOrdering: ["title", "startsAt", "endsAt", "kind", "reasoning"],
-        required: ["title", "startsAt", "endsAt", "kind"],
+        propertyOrdering: [
+          "title",
+          "startsAt",
+          "endsAt",
+          "kind",
+          "hasExplicitTime",
+          "reasoning",
+        ],
+        required: ["title", "startsAt", "endsAt", "kind", "hasExplicitTime"],
       },
     },
     clarification: {
@@ -46,6 +58,7 @@ export type GeneratedEvent = {
   startsAt: string;
   endsAt: string;
   kind: "event" | "task";
+  hasExplicitTime: boolean;
   reasoning?: string;
 };
 

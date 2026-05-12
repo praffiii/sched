@@ -11,11 +11,14 @@ import {
   eventToPosition,
   eventsOnDay,
   HOUR_HEIGHT_PX,
+  isUntimedTask,
+  zonedClockDate,
 } from "../lib/layout";
 import { getWeekday, isSameDay } from "../lib/week";
 import { EventChip } from "./EventChip";
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const TOP_TASKS_HEIGHT_PX = 44;
 
 type WeekGridProps = {
   days: Date[];
@@ -24,10 +27,16 @@ type WeekGridProps = {
 export function WeekGrid({ days }: WeekGridProps) {
   const calendarEvents = useAppStore((s) => s.calendarEvents);
   const aiPendingEvents = useAppStore((s) => s.aiPendingEvents);
+  const calendarTimezone = useAppStore((s) => s.calendarTimezone);
   const today = new Date();
 
   const conflicts = useMemo(
-    () => detectConflicts([...calendarEvents, ...aiPendingEvents]),
+    () =>
+      detectConflicts(
+        [...calendarEvents, ...aiPendingEvents].filter(
+          (event) => !isUntimedTask(event),
+        ),
+      ),
     [calendarEvents, aiPendingEvents],
   );
 
@@ -63,7 +72,7 @@ export function WeekGrid({ days }: WeekGridProps) {
 
       <div
         className="relative grid grid-cols-[48px_repeat(7,minmax(0,1fr))]"
-        style={{ height: HOUR_HEIGHT_PX * 24 }}
+        style={{ height: TOP_TASKS_HEIGHT_PX + HOUR_HEIGHT_PX * 24 }}
       >
         {/* Hour labels column */}
         <div className="relative border-r-2 border-ink">
@@ -71,7 +80,7 @@ export function WeekGrid({ days }: WeekGridProps) {
             <div
               key={h}
               className="absolute right-1 -translate-y-1/2 font-hand text-[10px] text-text-muted"
-              style={{ top: h * HOUR_HEIGHT_PX }}
+              style={{ top: TOP_TASKS_HEIGHT_PX + h * HOUR_HEIGHT_PX }}
             >
               {h === 0 ? "" : `${h}:00`}
             </div>
@@ -80,11 +89,18 @@ export function WeekGrid({ days }: WeekGridProps) {
 
         {/* Day columns */}
         {days.map((d) => {
-          const dayStart = new Date(d);
-          dayStart.setHours(0, 0, 0, 0);
-          const gcalForDay = eventsOnDay(calendarEvents, d);
-          const pendingForDay = eventsOnDay(aiPendingEvents, d);
-          const allForDay = [...gcalForDay, ...pendingForDay];
+          const gcalForDay = eventsOnDay(calendarEvents, d, calendarTimezone);
+          const pendingForDay = eventsOnDay(
+            aiPendingEvents,
+            d,
+            calendarTimezone,
+          );
+          const topTasks = [...gcalForDay, ...pendingForDay].filter(isUntimedTask);
+          const timedGcalForDay = gcalForDay.filter((event) => !isUntimedTask(event));
+          const timedPendingForDay = pendingForDay.filter(
+            (event) => !isUntimedTask(event),
+          );
+          const allForDay = [...timedGcalForDay, ...timedPendingForDay];
           const lanes = assignLanes(allForDay);
           const isToday = isSameDay(d, today);
 
@@ -101,12 +117,33 @@ export function WeekGrid({ days }: WeekGridProps) {
                 <div
                   key={h}
                   className="absolute inset-x-0 border-t border-ink/10"
-                  style={{ top: h * HOUR_HEIGHT_PX }}
+                  style={{ top: TOP_TASKS_HEIGHT_PX + h * HOUR_HEIGHT_PX }}
                 />
               ))}
 
-              {gcalForDay.map((event) => {
-                const { top, height } = eventToPosition(event, dayStart);
+              {topTasks.map((event, index) => (
+                <EventChip
+                  key={event.id}
+                  event={event}
+                  kind={
+                    "status" in event && event.status === "pending"
+                      ? "pending"
+                      : "gcal"
+                  }
+                  hasConflict={false}
+                  top={4 + index * 20}
+                  height={18}
+                  lane={0}
+                  totalLanes={1}
+                  timezone={calendarTimezone}
+                />
+              ))}
+
+              {timedGcalForDay.map((event) => {
+                const { top, height } = eventToPosition(
+                  event,
+                  zonedClockDate(event.startsAt, calendarTimezone),
+                );
                 const lane = lanes.get(event.id) ?? { lane: 0, totalLanes: 1 };
                 return (
                   <EventChip
@@ -114,16 +151,20 @@ export function WeekGrid({ days }: WeekGridProps) {
                     event={event}
                     kind="gcal"
                     hasConflict={conflicts.has(event.id)}
-                    top={top}
+                    top={TOP_TASKS_HEIGHT_PX + top}
                     height={height}
                     lane={lane.lane}
                     totalLanes={lane.totalLanes}
+                    timezone={calendarTimezone}
                   />
                 );
               })}
 
-              {pendingForDay.map((event) => {
-                const { top, height } = eventToPosition(event, dayStart);
+              {timedPendingForDay.map((event) => {
+                const { top, height } = eventToPosition(
+                  event,
+                  zonedClockDate(event.startsAt, calendarTimezone),
+                );
                 const lane = lanes.get(event.id) ?? { lane: 0, totalLanes: 1 };
                 return (
                   <EventChip
@@ -131,10 +172,11 @@ export function WeekGrid({ days }: WeekGridProps) {
                     event={event}
                     kind="pending"
                     hasConflict={conflicts.has(event.id)}
-                    top={top}
+                    top={TOP_TASKS_HEIGHT_PX + top}
                     height={height}
                     lane={lane.lane}
                     totalLanes={lane.totalLanes}
+                    timezone={calendarTimezone}
                   />
                 );
               })}

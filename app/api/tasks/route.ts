@@ -6,31 +6,8 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { aiPendingEvent } from "@/lib/db/schema";
 import { getGoogleOAuthClient } from "@/lib/google/oauth";
-import {
-  createCalendarEvent,
-  getPrimaryCalendarTimezone,
-  listEventsForContext,
-} from "@/lib/google/calendar";
-
-export async function GET() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  try {
-    const oauth = await getGoogleOAuthClient(session.user.id);
-    const timezone = await getPrimaryCalendarTimezone(oauth);
-    const events = await listEventsForContext(oauth, new Date());
-    return NextResponse.json({ events, timezone });
-  } catch (err) {
-    console.error("[calendar/events] failed", err);
-    return NextResponse.json(
-      { error: "Failed to load calendar events" },
-      { status: 502 },
-    );
-  }
-}
+import { createGoogleTask } from "@/lib/google/tasks";
+import type { GCalEvent } from "@/types/events";
 
 export async function POST(req: Request) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -62,37 +39,31 @@ export async function POST(req: Request) {
         eq(aiPendingEvent.id, pendingEventId),
         eq(aiPendingEvent.userId, session.user.id),
         eq(aiPendingEvent.status, "pending"),
+        eq(aiPendingEvent.kind, "task"),
+        eq(aiPendingEvent.hasExplicitTime, false),
       ),
     )
     .limit(1);
 
-  if (!pending || (pending.kind === "task" && !pending.hasExplicitTime)) {
+  if (!pending) {
     return NextResponse.json(
-      { error: "Pending calendar event not found" },
+      { error: "Pending task not found" },
       { status: 404 },
     );
   }
 
   try {
-    const endsAt =
-      pending.endsAt.getTime() > pending.startsAt.getTime()
-        ? pending.endsAt
-        : new Date(pending.startsAt.getTime() + 30 * 60 * 1000);
-
     const oauth = await getGoogleOAuthClient(session.user.id);
-    const timezone = await getPrimaryCalendarTimezone(oauth);
-    const event = await createCalendarEvent(oauth, {
+    const task = await createGoogleTask(oauth, {
       title: pending.title,
-      startsAt: pending.startsAt,
-      endsAt,
-      timezone,
+      dueAt: pending.startsAt,
     });
 
     await db
       .update(aiPendingEvent)
       .set({
         status: "accepted",
-        googleEventId: event.id,
+        googleEventId: task.id,
       })
       .where(
         and(
@@ -101,11 +72,20 @@ export async function POST(req: Request) {
         ),
       );
 
-    return NextResponse.json({ event });
+    const taskEvent: GCalEvent = {
+      id: task.id,
+      title: task.title,
+      startsAt: pending.startsAt.toISOString(),
+      endsAt: pending.endsAt.toISOString(),
+      kind: "task",
+      hasExplicitTime: false,
+    };
+
+    return NextResponse.json({ task, taskEvent });
   } catch (err) {
-    console.error("[calendar/events] create failed", err);
+    console.error("[tasks] create failed", err);
     return NextResponse.json(
-      { error: "Failed to create calendar event" },
+      { error: "Failed to create task" },
       { status: 502 },
     );
   }

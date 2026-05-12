@@ -7,6 +7,8 @@ export type GCalEvent = {
   title: string;
   startsAt: string;
   endsAt: string;
+  kind?: EventKind;
+  hasExplicitTime?: boolean;
 };
 
 export type AIPendingEvent = {
@@ -15,6 +17,7 @@ export type AIPendingEvent = {
   startsAt: string;
   endsAt: string;
   kind: EventKind;
+  hasExplicitTime: boolean;
   reasoning: string | null;
   status: PendingStatus;
   googleEventId: string | null;

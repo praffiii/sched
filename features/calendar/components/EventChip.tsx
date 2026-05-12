@@ -14,6 +14,7 @@ type EventChipProps = {
   height: number;
   lane: number;
   totalLanes: number;
+  timezone: string;
 };
 
 const GAP_PX = 2;
@@ -26,6 +27,7 @@ export function EventChip({
   height,
   lane,
   totalLanes,
+  timezone,
 }: EventChipProps) {
   // Distribute width evenly across overlapping lanes; subtract gap between
   // lanes so chips don't visually merge into each other.
@@ -57,7 +59,7 @@ export function EventChip({
       </div>
       {!isCompact ? (
         <div className="mt-0.5 truncate font-hand text-[10px] font-normal text-text-secondary">
-          {formatTimeRange(event.startsAt, event.endsAt)}
+          {formatTimeRange(event.startsAt, event.endsAt, timezone)}
         </div>
       ) : null}
     </div>

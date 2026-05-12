@@ -25,11 +25,24 @@ export function formatLocalIso(date: Date, timezone: string): string {
 
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   const offset = get("timeZoneName").replace("GMT", "").trim() || "+00:00";
-  const normalizedOffset = /^[+-]\d{2}:\d{2}$/.test(offset)
-    ? offset
-    : offset.length === 3
-      ? `${offset}:00`
-      : "+00:00";
+  const normalizedOffset = normalizeOffset(offset);
 
   return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}${normalizedOffset}`;
+}
+
+function normalizeOffset(offset: string): string {
+  const full = offset.match(/^([+-])(\d{2}):(\d{2})$/);
+  if (full) return offset;
+
+  const hourOnly = offset.match(/^([+-])(\d{1,2})$/);
+  if (hourOnly) {
+    return `${hourOnly[1]}${hourOnly[2].padStart(2, "0")}:00`;
+  }
+
+  const hourMinute = offset.match(/^([+-])(\d{1,2}):(\d{2})$/);
+  if (hourMinute) {
+    return `${hourMinute[1]}${hourMinute[2].padStart(2, "0")}:${hourMinute[3]}`;
+  }
+
+  return "+00:00";
 }

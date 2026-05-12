@@ -1,0 +1,1 @@
+ALTER TABLE "ai_pending_event" ADD COLUMN "has_explicit_time" boolean DEFAULT false NOT NULL;
