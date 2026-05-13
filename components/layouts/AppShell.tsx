@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 
+import { Toast } from "@/components/ui/Toast";
 import { useAppStore } from "@/store/app-store";
 
 import { TwoBLayout } from "./TwoBLayout";
@@ -23,7 +24,17 @@ export function AppShell({ initials }: AppShellProps) {
   }, [hydrated, hydrate]);
 
   if (uiMode === "2B") {
-    return <TwoBLayout initials={initials} />;
+    return (
+      <>
+        <TwoBLayout initials={initials} />
+        <Toast />
+      </>
+    );
   }
-  return <TwoDLayout />;
+  return (
+    <>
+      <TwoDLayout />
+      <Toast />
+    </>
+  );
 }

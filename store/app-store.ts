@@ -38,6 +38,8 @@ interface AppState {
   generating: boolean;
   pendingMutationIds: string[];
 
+  toast: string | null;
+
   setUIMode: (m: UIMode) => void;
   setCalendarAnchor: (date: Date) => void;
   openInspector: (eventId: string) => void;
@@ -50,6 +52,9 @@ interface AppState {
   generate: (prompt: string) => Promise<GenerateResponse | null>;
   acceptPending: (id: string) => Promise<void>;
   discardPending: (id: string) => Promise<void>;
+
+  showToast: (message: string) => void;
+  clearToast: () => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -63,6 +68,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   hydrated: false,
   generating: false,
   pendingMutationIds: [],
+  toast: null,
 
   setUIMode: (m) => set({ uiMode: m }),
 
@@ -190,6 +196,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (!res.ok) {
         const text = await res.text();
         console.error("[store.acceptPending] failed", text);
+        let toast = "Failed to save — try again.";
+        try {
+          const p = JSON.parse(text) as { error?: string };
+          if (p.error) toast = p.error;
+        } catch { /* ignore */ }
+        set({ toast });
         return;
       }
 
@@ -213,6 +225,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  showToast: (message) => set({ toast: message }),
+
+  clearToast: () => set({ toast: null }),
+
   discardPending: async (id) => {
     const pending = get().aiPendingEvents.find((event) => event.id === id);
     if (!pending || get().pendingMutationIds.includes(id)) return;
@@ -228,6 +244,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (!res.ok) {
         const text = await res.text();
         console.error("[store.discardPending] failed", text);
+        let toast = "Failed to discard — try again.";
+        try {
+          const p = JSON.parse(text) as { error?: string };
+          if (p.error) toast = p.error;
+        } catch { /* ignore */ }
+        set({ toast });
         return;
       }
 
