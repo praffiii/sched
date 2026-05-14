@@ -10,6 +10,7 @@ import {
   assignLanes,
   detectConflicts,
   eventToPosition,
+  eventsOnDay,
   HOUR_HEIGHT_PX,
   isUntimedTask,
   PX_PER_MINUTE,
@@ -221,22 +222,8 @@ export function DayGrid({ day }: { day: Date }) {
     void updatePendingDraft(event.id, { title });
   };
 
-  const gcalForDay = calendarEvents.filter((event) => {
-    const d = new Date(event.startsAt);
-    return (
-      d.getFullYear() === day.getFullYear() &&
-      d.getMonth() === day.getMonth() &&
-      d.getDate() === day.getDate()
-    );
-  });
-  const pendingForDay = aiPendingEvents.filter((event) => {
-    const d = new Date(event.startsAt);
-    return (
-      d.getFullYear() === day.getFullYear() &&
-      d.getMonth() === day.getMonth() &&
-      d.getDate() === day.getDate()
-    );
-  });
+  const gcalForDay = eventsOnDay(calendarEvents, day, calendarTimezone);
+  const pendingForDay = eventsOnDay(aiPendingEvents, day, calendarTimezone);
 
   const topTasks = [...gcalForDay, ...pendingForDay].filter(isUntimedTask);
   const timedGcal = gcalForDay.filter((event) => !isUntimedTask(event));
