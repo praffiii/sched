@@ -1,4 +1,4 @@
-import { Avatar } from "@/components/ui/Avatar";
+import { ProfileMenu } from "@/features/auth/components/ProfileMenu";
 import { cn } from "@/lib/utils/cn";
 
 import { ToggleModeButton } from "./ToggleModeButton";
@@ -30,7 +30,7 @@ export function ChatHeader({ variant, initials, onPointerDown }: ChatHeaderProps
       </div>
       <div className="flex items-center gap-2">
         {variant === "full" && initials ? (
-          <Avatar size="sm" initials={initials} />
+          <ProfileMenu initials={initials} />
         ) : null}
         <ToggleModeButton />
       </div>
