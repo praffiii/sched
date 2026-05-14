@@ -22,7 +22,30 @@
 
 # misc
 .DS_Store
+
+# credential-guard
 *.pem
+*.key
+*.crt
+*.cer
+*.cert
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.p8
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+master.key
+credentials
+credentials.*
+*credentials*.json
+secrets
+secrets.*
+*secret*.json
+service-account*.json
 
 # debug
 npm-debug.log*
@@ -37,8 +60,13 @@ yarn-error.log*
 # vercel
 .vercel
 
-# skills (local dev tools, not part of repo)
+# skills / local dev tools, not part of repo
 .agents/
+.claude/
+.junie/
+.windsurf/
+react-doctor.config.json
+react-doctor-report/
 
 # typescript
 *.tsbuildinfo
