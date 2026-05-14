@@ -69,3 +69,53 @@ export function isSameDay(a: Date, b: Date): boolean {
 export function shiftWeek(anchor: Date, weeks: number): Date {
   return addDays(anchor, weeks * 7);
 }
+
+export type DayRange = {
+  day: Date;
+};
+
+export function getDayRange(anchor: Date): DayRange {
+  return { day: startOfDay(anchor) };
+}
+
+export type MonthRange = {
+  start: Date;
+  end: Date;
+  weeks: { days: Date[] }[];
+};
+
+export function getMonthRange(anchor: Date): MonthRange {
+  const base = startOfDay(anchor);
+  const year = base.getFullYear();
+  const month = base.getMonth();
+
+  const firstOfMonth = new Date(year, month, 1);
+  const firstDayOfWeek = firstOfMonth.getDay();
+  const diffToMonday = firstDayOfWeek === 0 ? -6 : 1 - firstDayOfWeek;
+  const calendarStart = addDays(firstOfMonth, diffToMonday);
+
+  const lastOfMonth = new Date(year, month + 1, 0);
+  const lastDayOfWeek = lastOfMonth.getDay();
+  const diffToSunday = lastDayOfWeek === 0 ? 0 : 7 - lastDayOfWeek;
+  const calendarEnd = addDays(lastOfMonth, diffToSunday);
+
+  const totalDays =
+    Math.round((calendarEnd.getTime() - calendarStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  const weekCount = Math.ceil(totalDays / 7);
+
+  const weeks = Array.from({ length: weekCount }, (_, wi) => ({
+    days: Array.from({ length: 7 }, (_, di) => addDays(calendarStart, wi * 7 + di)),
+  }));
+
+  return { start: firstOfMonth, end: lastOfMonth, weeks };
+}
+
+export function shiftDay(anchor: Date, days: number): Date {
+  return addDays(anchor, days);
+}
+
+export function shiftMonth(anchor: Date, months: number): Date {
+  const next = new Date(anchor);
+  next.setMonth(next.getMonth() + months);
+  return next;
+}

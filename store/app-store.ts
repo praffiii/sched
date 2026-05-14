@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 import type { ChatMessage } from "@/types/chat";
 import type { AIPendingEvent, GCalEvent } from "@/types/events";
-import type { UIMode } from "@/types/ui";
+import type { CalendarView, UIMode } from "@/types/ui";
 
 type GenerateResponse = {
   pendingEvents: AIPendingEvent[];
@@ -93,6 +93,7 @@ interface AppState {
   calendarEvents: GCalEvent[];
   aiPendingEvents: AIPendingEvent[];
   calendarTimezone: string;
+  calendarView: CalendarView;
 
   hydrated: boolean;
   uiRestored: boolean;
@@ -102,6 +103,7 @@ interface AppState {
   toast: string | null;
 
   setUIMode: (m: UIMode) => void;
+  setCalendarView: (view: CalendarView) => void;
   setCalendarAnchor: (date: Date) => void;
   openInspector: (eventId: string) => void;
   closeInspector: () => void;
@@ -130,6 +132,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   calendarEvents: [],
   aiPendingEvents: [],
   calendarTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  calendarView: "week",
   hydrated: false,
   uiRestored: false,
   generating: false,
@@ -140,6 +143,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     writeSavedUIMode(m);
     set({ uiMode: m });
   },
+
+  setCalendarView: (view) => set({ calendarView: view as CalendarView }),
 
   restoreUIState: () => {
     const savedUIMode = readSavedUIMode();
