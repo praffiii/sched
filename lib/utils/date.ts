@@ -10,6 +10,56 @@ export function getContextWindow(now: Date): {
   };
 }
 
+export function zonedLocalDateTimeToIso(
+  date: string,
+  time: string,
+  timezone: string,
+): string | null {
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute] = time.split(":").map(Number);
+
+  if (
+    !year ||
+    !month ||
+    !day ||
+    Number.isNaN(hour) ||
+    Number.isNaN(minute)
+  ) {
+    return null;
+  }
+
+  const targetWallTime = Date.UTC(year, month - 1, day, hour, minute, 0);
+  let utcGuess = targetWallTime;
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+
+  for (let i = 0; i < 3; i++) {
+    const parts = formatter.formatToParts(new Date(utcGuess));
+    const get = (type: string) =>
+      parts.find((p) => p.type === type)?.value ?? "0";
+    const formattedHour = Number(get("hour"));
+    const wallTimeAtGuess = Date.UTC(
+      Number(get("year")),
+      Number(get("month")) - 1,
+      Number(get("day")),
+      formattedHour === 24 ? 0 : formattedHour,
+      Number(get("minute")),
+      Number(get("second")),
+    );
+    utcGuess += targetWallTime - wallTimeAtGuess;
+  }
+
+  return new Date(utcGuess).toISOString();
+}
+
 export function formatLocalIso(date: Date, timezone: string): string {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,

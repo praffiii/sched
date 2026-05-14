@@ -22,10 +22,70 @@ type AcceptTaskResponse = {
 type CalendarEventsResponse = {
   events: GCalEvent[];
   timezone?: string;
+  googleTimezone?: string;
 };
+
+type PendingDraftUpdate = Partial<
+  Pick<
+    AIPendingEvent,
+    "title" | "startsAt" | "endsAt" | "kind" | "hasExplicitTime" | "reasoning"
+  >
+>;
+
+type PendingUpdateResponse = {
+  pendingEvent: AIPendingEvent;
+};
+
+type RefinePendingResponse = {
+  pendingEvent: AIPendingEvent;
+  assistantMessage: ChatMessage;
+  userMessage: ChatMessage;
+  timezone?: string;
+};
+
+const UI_MODE_STORAGE_KEY = "sched:ui-mode";
+
+function readSavedUIMode(): UIMode | null {
+  try {
+    const raw = localStorage.getItem(UI_MODE_STORAGE_KEY);
+    if (raw === "2B" || raw === "2D") return raw;
+  } catch {
+    /* ignore storage errors */
+  }
+  return null;
+}
+
+function writeSavedUIMode(mode: UIMode) {
+  if (mode !== "2B" && mode !== "2D") return;
+  try {
+    localStorage.setItem(UI_MODE_STORAGE_KEY, mode);
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
+function calendarDayAnchorIso(iso: string, timezone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(iso));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const year = Number(get("year"));
+  const month = Number(get("month"));
+  const day = Number(get("day"));
+
+  if (!year || !month || !day) return iso;
+
+  // Noon avoids midnight timezone edge cases when CalendarSurface computes
+  // the containing local week using Date methods.
+  return new Date(year, month - 1, day, 12, 0, 0, 0).toISOString();
+}
 
 interface AppState {
   uiMode: UIMode;
+  previousUIMode: UIMode;
   selectedEventId: string | null;
   calendarAnchorAt: string;
 
@@ -35,6 +95,7 @@ interface AppState {
   calendarTimezone: string;
 
   hydrated: boolean;
+  uiRestored: boolean;
   generating: boolean;
   pendingMutationIds: string[];
 
@@ -48,8 +109,11 @@ interface AppState {
   appendMessage: (m: ChatMessage) => void;
   upsertPendingEvent: (e: AIPendingEvent) => void;
 
+  restoreUIState: () => void;
   hydrate: () => Promise<void>;
   generate: (prompt: string) => Promise<GenerateResponse | null>;
+  updatePendingDraft: (id: string, patch: PendingDraftUpdate) => Promise<void>;
+  refinePending: (id: string, instruction: string) => Promise<void>;
   acceptPending: (id: string) => Promise<void>;
   discardPending: (id: string) => Promise<void>;
 
@@ -59,6 +123,7 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set, get) => ({
   uiMode: "2B",
+  previousUIMode: "2D",
   selectedEventId: null,
   calendarAnchorAt: new Date().toISOString(),
   chatHistory: [],
@@ -66,18 +131,48 @@ export const useAppStore = create<AppState>((set, get) => ({
   aiPendingEvents: [],
   calendarTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   hydrated: false,
+  uiRestored: false,
   generating: false,
   pendingMutationIds: [],
   toast: null,
 
-  setUIMode: (m) => set({ uiMode: m }),
+  setUIMode: (m) => {
+    writeSavedUIMode(m);
+    set({ uiMode: m });
+  },
+
+  restoreUIState: () => {
+    const savedUIMode = readSavedUIMode();
+    set({
+      uiMode: savedUIMode ?? "2B",
+      previousUIMode: savedUIMode ?? "2D",
+      uiRestored: true,
+    });
+  },
 
   setCalendarAnchor: (date) => set({ calendarAnchorAt: date.toISOString() }),
 
   openInspector: (eventId) =>
-    set({ uiMode: "inspector", selectedEventId: eventId }),
+    set((s) => {
+      const event =
+        s.aiPendingEvents.find((pending) => pending.id === eventId) ??
+        s.calendarEvents.find((calendarEvent) => calendarEvent.id === eventId);
 
-  closeInspector: () => set({ uiMode: "2D", selectedEventId: null }),
+      return {
+        previousUIMode: s.uiMode === "inspector" ? s.previousUIMode : s.uiMode,
+        uiMode: "inspector",
+        selectedEventId: eventId,
+        calendarAnchorAt: event
+          ? calendarDayAnchorIso(event.startsAt, s.calendarTimezone)
+          : s.calendarAnchorAt,
+      };
+    }),
+
+  closeInspector: () =>
+    set((s) => ({
+      uiMode: s.previousUIMode === "inspector" ? "2D" : s.previousUIMode,
+      selectedEventId: null,
+    })),
 
   appendMessage: (m) =>
     set((s) => ({ chatHistory: [...s.chatHistory, m] })),
@@ -92,9 +187,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
 
   hydrate: async () => {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const [historyRes, eventsRes, pendingRes] = await Promise.all([
       fetch("/api/chat/history"),
-      fetch("/api/calendar/events"),
+      fetch("/api/calendar/events", {
+        headers: { "x-client-timezone": timezone },
+      }),
       fetch("/api/ai/pending"),
     ]);
 
@@ -108,12 +206,24 @@ export const useAppStore = create<AppState>((set, get) => ({
       ? ((await pendingRes.json()).pendingEvents as AIPendingEvent[])
       : [];
 
+    const googleTimezone = eventsPayload.googleTimezone;
+    const timezoneMismatch =
+      typeof googleTimezone === "string" &&
+      googleTimezone.length > 0 &&
+      googleTimezone !== timezone;
+
+    // Always use the browser timezone for display. Google Calendar web can be
+    // configured to a different timezone than the user's active device; when it
+    // is, the same event will appear at different wall-clock times in Google UI.
     set({
       chatHistory: history,
       calendarEvents: eventsPayload.events,
-      calendarTimezone: eventsPayload.timezone ?? get().calendarTimezone,
+      calendarTimezone: timezone,
       aiPendingEvents: pending,
       hydrated: true,
+      toast: timezoneMismatch
+        ? `Google Calendar web uses ${googleTimezone}; this device uses ${timezone}. Match them to avoid time shifts.`
+        : get().toast,
     });
   },
 
@@ -169,9 +279,105 @@ export const useAppStore = create<AppState>((set, get) => ({
         chatHistory: [...s.chatHistory, data.userMessage, data.assistantMessage],
         aiPendingEvents: [...s.aiPendingEvents, ...data.pendingEvents],
         calendarTimezone: data.timezone ?? s.calendarTimezone,
-        calendarAnchorAt: data.pendingEvents[0]?.startsAt ?? s.calendarAnchorAt,
+        calendarAnchorAt: data.pendingEvents[0]
+          ? calendarDayAnchorIso(
+              data.pendingEvents[0].startsAt,
+              data.timezone ?? s.calendarTimezone,
+            )
+          : s.calendarAnchorAt,
       }));
       return data;
+    } finally {
+      set({ generating: false });
+    }
+  },
+
+  updatePendingDraft: async (id, patch) => {
+    const pending = get().aiPendingEvents.find((event) => event.id === id);
+    if (!pending) return;
+
+    const optimistic: AIPendingEvent = { ...pending, ...patch };
+    set((s) => ({
+      aiPendingEvents: s.aiPendingEvents.map((event) =>
+        event.id === id ? optimistic : event,
+      ),
+      calendarAnchorAt: patch.startsAt
+        ? calendarDayAnchorIso(patch.startsAt, s.calendarTimezone)
+        : s.calendarAnchorAt,
+    }));
+
+    const res = await fetch(`/api/ai/pending/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("[store.updatePendingDraft] failed", text);
+      let toast = "Failed to update draft — try again.";
+      try {
+        const p = JSON.parse(text) as { error?: string };
+        if (p.error) toast = p.error;
+      } catch { /* ignore */ }
+      set((s) => ({
+        toast,
+        aiPendingEvents: s.aiPendingEvents.map((event) =>
+          event.id === id ? pending : event,
+        ),
+      }));
+      return;
+    }
+
+    const data = (await res.json()) as PendingUpdateResponse;
+    set((s) => ({
+      aiPendingEvents: s.aiPendingEvents.map((event) =>
+        event.id === id ? data.pendingEvent : event,
+      ),
+      calendarAnchorAt: calendarDayAnchorIso(
+        data.pendingEvent.startsAt,
+        s.calendarTimezone,
+      ),
+    }));
+  },
+
+  refinePending: async (id, instruction) => {
+    const pending = get().aiPendingEvents.find((event) => event.id === id);
+    if (!pending || get().generating) return;
+
+    set({ generating: true });
+    try {
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const res = await fetch(`/api/ai/pending/${id}/refine`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instruction, timezone }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("[store.refinePending] failed", text);
+        let toast = "Failed to refine draft — try again.";
+        try {
+          const p = JSON.parse(text) as { error?: string };
+          if (p.error) toast = p.error;
+        } catch { /* ignore */ }
+        set({ toast });
+        return;
+      }
+
+      const data = (await res.json()) as RefinePendingResponse;
+      set((s) => ({
+        chatHistory: [...s.chatHistory, data.userMessage, data.assistantMessage],
+        aiPendingEvents: s.aiPendingEvents.map((event) =>
+          event.id === id ? data.pendingEvent : event,
+        ),
+        calendarTimezone: data.timezone ?? s.calendarTimezone,
+        calendarAnchorAt: calendarDayAnchorIso(
+          data.pendingEvent.startsAt,
+          data.timezone ?? s.calendarTimezone,
+        ),
+      }));
     } finally {
       set({ generating: false });
     }
@@ -184,13 +390,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => ({ pendingMutationIds: [...s.pendingMutationIds, id] }));
     try {
       const endpoint =
-        pending.kind === "task" && !pending.hasExplicitTime
-          ? "/api/tasks"
-          : "/api/calendar/events";
+        pending.kind === "task" ? "/api/tasks" : "/api/calendar/events";
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pendingEventId: id }),
+        body: JSON.stringify({
+          pendingEventId: id,
+          timezone: get().calendarTimezone,
+        }),
       });
 
       if (!res.ok) {
@@ -214,7 +421,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       set((s) => ({
         aiPendingEvents: s.aiPendingEvents.filter((event) => event.id !== id),
         calendarEvents: [...s.calendarEvents, acceptedEvent],
-        calendarAnchorAt: acceptedEvent.startsAt,
+        calendarAnchorAt: calendarDayAnchorIso(
+          acceptedEvent.startsAt,
+          s.calendarTimezone,
+        ),
+        ...(s.selectedEventId === id
+          ? {
+              uiMode: s.previousUIMode === "inspector" ? "2D" : s.previousUIMode,
+              selectedEventId: null,
+            }
+          : {}),
       }));
     } finally {
       set((s) => ({
@@ -255,6 +471,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       set((s) => ({
         aiPendingEvents: s.aiPendingEvents.filter((event) => event.id !== id),
+        ...(s.selectedEventId === id
+          ? {
+              uiMode: s.previousUIMode === "inspector" ? "2D" : s.previousUIMode,
+              selectedEventId: null,
+            }
+          : {}),
       }));
     } finally {
       set((s) => ({

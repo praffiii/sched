@@ -6,7 +6,15 @@ import { SketchBtn } from "@/components/ui/SketchBtn";
 import { SketchInput } from "@/components/ui/SketchInput";
 import { useAppStore } from "@/store/app-store";
 
-export function ChatInput() {
+type ChatInputProps = {
+  onSubmitPrompt?: (prompt: string) => Promise<void> | void;
+  placeholder?: string;
+};
+
+export function ChatInput({
+  onSubmitPrompt,
+  placeholder = "ask or refine…",
+}: ChatInputProps) {
   const [value, setValue] = useState("");
   const generating = useAppStore((s) => s.generating);
   const generate = useAppStore((s) => s.generate);
@@ -16,7 +24,11 @@ export function ChatInput() {
     const prompt = value.trim();
     if (!prompt || generating) return;
     setValue("");
-    await generate(prompt);
+    if (onSubmitPrompt) {
+      await onSubmitPrompt(prompt);
+    } else {
+      await generate(prompt);
+    }
   };
 
   return (
@@ -24,7 +36,7 @@ export function ChatInput() {
       <SketchInput
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder="ask or refine…"
+        placeholder={placeholder}
         disabled={generating}
         aria-label="chat input"
       />

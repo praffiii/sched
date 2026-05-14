@@ -6,14 +6,17 @@ import { ToggleModeButton } from "./ToggleModeButton";
 type ChatHeaderProps = {
   variant: "full" | "drawer";
   initials?: string;
+  onPointerDown?: React.PointerEventHandler<HTMLDivElement>;
 };
 
-export function ChatHeader({ variant, initials }: ChatHeaderProps) {
+export function ChatHeader({ variant, initials, onPointerDown }: ChatHeaderProps) {
   return (
     <div
+      onPointerDown={onPointerDown}
       className={cn(
-        "flex items-center justify-between border-b-2 border-ink px-4 py-3",
+        "flex items-center justify-between border-b-2 border-ink px-4 py-3 select-none",
         variant === "full" ? "bg-paper" : "bg-paper-warm",
+        onPointerDown && "cursor-grab active:cursor-grabbing touch-none",
       )}
     >
       <div className="flex items-center gap-2">

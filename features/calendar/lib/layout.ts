@@ -23,10 +23,14 @@ export function eventToPosition(event: AnyEvent, dayStart: Date): EventPosition 
   const minutesFromStart =
     dayStart.getHours() * 60 + dayStart.getMinutes();
   const durationMinutes = Math.max(MIN_RENDER_MINUTES, (end - start) / 60000);
+  const height = durationMinutes * PX_PER_MINUTE;
+  const dayHeight = HOUR_HEIGHT_PX * 24;
 
   return {
-    top: minutesFromStart * PX_PER_MINUTE,
-    height: durationMinutes * PX_PER_MINUTE,
+    // Keep near-midnight chips visible. A 23:59 deadline still needs a
+    // minimum-height chip, but it must not render outside the day column.
+    top: Math.min(minutesFromStart * PX_PER_MINUTE, Math.max(0, dayHeight - height)),
+    height,
   };
 }
 
@@ -104,7 +108,10 @@ export function eventsOnDay<T extends AnyEvent>(
 }
 
 export function isUntimedTask(event: AnyEvent): boolean {
-  return event.kind === "task" && event.hasExplicitTime === false;
+  // In Sched UX, tasks are todos/deadlines, not time blocks. Even when a
+  // prompt includes a deadline time (e.g. "23:59"), render it in the task lane
+  // instead of as a tiny calendar block at the bottom of the day.
+  return event.kind === "task";
 }
 
 export function zonedClockDate(iso: string, timezone: string): Date {

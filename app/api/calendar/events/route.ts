@@ -11,8 +11,10 @@ import {
   getPrimaryCalendarTimezone,
   listEventsForContext,
 } from "@/lib/google/calendar";
+import { listGoogleTasksForContext } from "@/lib/google/tasks";
+import type { GCalEvent } from "@/types/events";
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -20,9 +22,29 @@ export async function GET() {
 
   try {
     const oauth = await getGoogleOAuthClient(session.user.id);
-    const timezone = await getPrimaryCalendarTimezone(oauth);
-    const events = await listEventsForContext(oauth, new Date());
-    return NextResponse.json({ events, timezone });
+    const now = new Date();
+    // Prefer client-sent timezone header; query-param fallback for compatibility.
+    const googleTimezone = await getPrimaryCalendarTimezone(oauth);
+    const requestedTimezone =
+      req.headers.get("x-client-timezone") ??
+      new URL(req.url, process.env.BETTER_AUTH_URL ?? "http://localhost")
+        .searchParams.get("timezone");
+    const timezone =
+      requestedTimezone && requestedTimezone.length > 0
+        ? requestedTimezone
+        : googleTimezone;
+    const events = await listEventsForContext(oauth, now);
+    let tasks: GCalEvent[] = [];
+    try {
+      tasks = await listGoogleTasksForContext(oauth, now, timezone);
+    } catch (err) {
+      console.error("[calendar/events] tasks fetch failed", err);
+    }
+    return NextResponse.json({
+      events: [...events, ...tasks],
+      timezone,
+      googleTimezone,
+    });
   } catch (err) {
     console.error("[calendar/events] failed", err);
     return NextResponse.json(
@@ -38,7 +60,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { pendingEventId?: unknown };
+  let body: { pendingEventId?: unknown; timezone?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -47,6 +69,10 @@ export async function POST(req: Request) {
 
   const pendingEventId =
     typeof body.pendingEventId === "string" ? body.pendingEventId : "";
+  const requestedTimezone =
+    typeof body.timezone === "string" && body.timezone.length > 0
+      ? body.timezone
+      : null;
   if (!pendingEventId) {
     return NextResponse.json(
       { error: "pendingEventId is required" },
@@ -66,7 +92,7 @@ export async function POST(req: Request) {
     )
     .limit(1);
 
-  if (!pending || (pending.kind === "task" && !pending.hasExplicitTime)) {
+  if (!pending || pending.kind === "task") {
     return NextResponse.json(
       { error: "Pending calendar event not found" },
       { status: 404 },
@@ -80,7 +106,8 @@ export async function POST(req: Request) {
         : new Date(pending.startsAt.getTime() + 30 * 60 * 1000);
 
     const oauth = await getGoogleOAuthClient(session.user.id);
-    const timezone = await getPrimaryCalendarTimezone(oauth);
+    const timezone =
+      requestedTimezone ?? (await getPrimaryCalendarTimezone(oauth));
     const event = await createCalendarEvent(oauth, {
       title: pending.title,
       startsAt: pending.startsAt,
