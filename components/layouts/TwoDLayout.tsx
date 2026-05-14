@@ -1,11 +1,13 @@
 import { CalendarSurface } from "@/features/calendar/components/CalendarSurface";
-import { ChatPanel } from "@/features/chat/components/ChatPanel";
+import { ToggleModeButton } from "@/features/chat/components/ToggleModeButton";
 
 export function TwoDLayout() {
   return (
     <div className="relative h-screen w-full">
       <CalendarSurface />
-      <ChatPanel variant="drawer" />
+      <div className="fixed bottom-4 right-4 z-20">
+        <ToggleModeButton />
+      </div>
     </div>
   );
 }
