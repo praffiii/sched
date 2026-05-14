@@ -7,7 +7,11 @@ import type { AIPendingEvent } from "@/types/events";
 
 import { ChatMessageBubble } from "./ChatMessageBubble";
 
-export function ChatMessageList() {
+type ChatMessageListProps = {
+  hidePendingCards?: boolean;
+};
+
+export function ChatMessageList({ hidePendingCards = false }: ChatMessageListProps) {
   const chatHistory = useAppStore((s) => s.chatHistory);
   const aiPendingEvents = useAppStore((s) => s.aiPendingEvents);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -57,7 +61,7 @@ export function ChatMessageList() {
           <ChatMessageBubble
             key={message.id}
             message={message}
-            pendingEvents={pendingByMessage.get(message.id) ?? []}
+            pendingEvents={hidePendingCards ? [] : pendingByMessage.get(message.id) ?? []}
           />
         ))
       )}

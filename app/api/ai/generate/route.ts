@@ -156,10 +156,13 @@ export async function POST(req: Request) {
   }
 
   let calendarEvents = [] as Awaited<ReturnType<typeof listEventsForContext>>;
-  let effectiveTimezone = timezone;
+  const effectiveTimezone = timezone;
   try {
     const oauth = await getGoogleOAuthClient(session.user.id);
-    effectiveTimezone = await getPrimaryCalendarTimezone(oauth);
+    // Use the client/browser timezone for scheduling semantics. Google Calendar
+    // account timezone can differ from the user's active device timezone, which
+    // causes events to appear at different times on mobile.
+    await getPrimaryCalendarTimezone(oauth);
     calendarEvents = await listEventsForContext(oauth, new Date());
   } catch (err) {
     console.error("[ai/generate] calendar fetch failed", err);

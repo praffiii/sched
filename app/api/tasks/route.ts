@@ -40,7 +40,6 @@ export async function POST(req: Request) {
         eq(aiPendingEvent.userId, session.user.id),
         eq(aiPendingEvent.status, "pending"),
         eq(aiPendingEvent.kind, "task"),
-        eq(aiPendingEvent.hasExplicitTime, false),
       ),
     )
     .limit(1);
