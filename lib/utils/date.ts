@@ -1,4 +1,5 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_TIMEZONE = "UTC";
 
 export function getContextWindow(now: Date): {
   timeMin: string;
@@ -30,8 +31,9 @@ export function zonedLocalDateTimeToIso(
 
   const targetWallTime = Date.UTC(year, month - 1, day, hour, minute, 0);
   let utcGuess = targetWallTime;
+  const safeTimezone = normalizeTimezone(timezone);
   const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
+    timeZone: safeTimezone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -61,8 +63,9 @@ export function zonedLocalDateTimeToIso(
 }
 
 export function formatLocalIso(date: Date, timezone: string): string {
+  const safeTimezone = normalizeTimezone(timezone);
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
+    timeZone: safeTimezone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -78,6 +81,20 @@ export function formatLocalIso(date: Date, timezone: string): string {
   const normalizedOffset = normalizeOffset(offset);
 
   return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}${normalizedOffset}`;
+}
+
+export function normalizeTimezone(
+  timezone: string | null | undefined,
+  fallback = DEFAULT_TIMEZONE,
+): string {
+  if (!timezone) return fallback;
+
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: timezone }).format();
+    return timezone;
+  } catch {
+    return fallback;
+  }
 }
 
 function normalizeOffset(offset: string): string {

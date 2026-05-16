@@ -13,7 +13,7 @@ import {
   getPrimaryCalendarTimezone,
   listEventsForContext,
 } from "@/lib/google/calendar";
-import { formatLocalIso } from "@/lib/utils/date";
+import { formatLocalIso, normalizeTimezone } from "@/lib/utils/date";
 import type { AIPendingEvent, EventKind } from "@/types/events";
 
 const MAX_INSTRUCTION_LENGTH = 1000;
@@ -134,7 +134,7 @@ export async function POST(req: Request, ctx: RouteContext) {
     typeof body.instruction === "string" ? body.instruction.trim() : "";
   const timezone =
     typeof body.timezone === "string" && body.timezone.length > 0
-      ? body.timezone
+      ? normalizeTimezone(body.timezone)
       : "UTC";
 
   if (!instruction || instruction.length > MAX_INSTRUCTION_LENGTH) {
