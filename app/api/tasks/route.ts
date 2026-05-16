@@ -1,10 +1,11 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
-
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { aiPendingEvent } from "@/lib/db/schema";
+import {
+  claimPendingEvent,
+  completePendingEvent,
+  releasePendingEventClaim,
+} from "@/lib/ai-pending";
 import { getGoogleOAuthClient } from "@/lib/google/oauth";
 import { createGoogleTask } from "@/lib/google/tasks";
 import type { GCalEvent } from "@/types/events";
@@ -31,18 +32,11 @@ export async function POST(req: Request) {
     );
   }
 
-  const [pending] = await db
-    .select()
-    .from(aiPendingEvent)
-    .where(
-      and(
-        eq(aiPendingEvent.id, pendingEventId),
-        eq(aiPendingEvent.userId, session.user.id),
-        eq(aiPendingEvent.status, "pending"),
-        eq(aiPendingEvent.kind, "task"),
-      ),
-    )
-    .limit(1);
+  const pending = await claimPendingEvent({
+    id: pendingEventId,
+    userId: session.user.id,
+    kind: "task",
+  });
 
   if (!pending) {
     return NextResponse.json(
@@ -51,25 +45,20 @@ export async function POST(req: Request) {
     );
   }
 
+  let externalTaskCreated = false;
   try {
     const oauth = await getGoogleOAuthClient(session.user.id);
     const task = await createGoogleTask(oauth, {
       title: pending.title,
       dueAt: pending.startsAt,
     });
+    externalTaskCreated = true;
 
-    await db
-      .update(aiPendingEvent)
-      .set({
-        status: "accepted",
-        googleEventId: task.id,
-      })
-      .where(
-        and(
-          eq(aiPendingEvent.id, pending.id),
-          eq(aiPendingEvent.userId, session.user.id),
-        ),
-      );
+    await completePendingEvent({
+      id: pending.id,
+      userId: session.user.id,
+      googleEventId: task.id,
+    });
 
     const taskEvent: GCalEvent = {
       id: task.id,
@@ -82,6 +71,12 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ task, taskEvent });
   } catch (err) {
+    if (!externalTaskCreated) {
+      await releasePendingEventClaim({
+        id: pending.id,
+        userId: session.user.id,
+      });
+    }
     console.error("[tasks] create failed", err);
     return NextResponse.json(
       { error: "Failed to create task" },

@@ -10,7 +10,7 @@ import {
   getPrimaryCalendarTimezone,
   listEventsForContext,
 } from "@/lib/google/calendar";
-import { formatLocalIso } from "@/lib/utils/date";
+import { formatLocalIso, normalizeTimezone } from "@/lib/utils/date";
 import {
   buildUserMessage,
   PROMPT_VERSION,
@@ -145,7 +145,7 @@ export async function POST(req: Request) {
   const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
   const timezone =
     typeof body.timezone === "string" && body.timezone.length > 0
-      ? body.timezone
+      ? normalizeTimezone(body.timezone)
       : "UTC";
 
   if (!prompt || prompt.length > MAX_PROMPT_LENGTH) {

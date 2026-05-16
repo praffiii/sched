@@ -1,10 +1,12 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { aiPendingEvent } from "@/lib/db/schema";
+import {
+  claimPendingEvent,
+  completePendingEvent,
+  releasePendingEventClaim,
+} from "@/lib/ai-pending";
 import { getGoogleOAuthClient } from "@/lib/google/oauth";
 import {
   createCalendarEvent,
@@ -12,6 +14,7 @@ import {
   listEventsForContext,
 } from "@/lib/google/calendar";
 import { listGoogleTasksForContext } from "@/lib/google/tasks";
+import { normalizeTimezone } from "@/lib/utils/date";
 import type { GCalEvent } from "@/types/events";
 
 export async function GET(req: Request) {
@@ -31,7 +34,7 @@ export async function GET(req: Request) {
         .searchParams.get("timezone");
     const timezone =
       requestedTimezone && requestedTimezone.length > 0
-        ? requestedTimezone
+        ? normalizeTimezone(requestedTimezone, googleTimezone)
         : googleTimezone;
     const events = await listEventsForContext(oauth, now);
     let tasks: GCalEvent[] = [];
@@ -61,6 +64,7 @@ export async function POST(req: Request) {
   }
 
   let body: { pendingEventId?: unknown; timezone?: unknown };
+  let externalEventCreated = false;
   try {
     body = await req.json();
   } catch {
@@ -80,19 +84,13 @@ export async function POST(req: Request) {
     );
   }
 
-  const [pending] = await db
-    .select()
-    .from(aiPendingEvent)
-    .where(
-      and(
-        eq(aiPendingEvent.id, pendingEventId),
-        eq(aiPendingEvent.userId, session.user.id),
-        eq(aiPendingEvent.status, "pending"),
-      ),
-    )
-    .limit(1);
+  const pending = await claimPendingEvent({
+    id: pendingEventId,
+    userId: session.user.id,
+    kind: "event",
+  });
 
-  if (!pending || pending.kind === "task") {
+  if (!pending) {
     return NextResponse.json(
       { error: "Pending calendar event not found" },
       { status: 404 },
@@ -107,29 +105,31 @@ export async function POST(req: Request) {
 
     const oauth = await getGoogleOAuthClient(session.user.id);
     const timezone =
-      requestedTimezone ?? (await getPrimaryCalendarTimezone(oauth));
+      requestedTimezone
+        ? normalizeTimezone(requestedTimezone, await getPrimaryCalendarTimezone(oauth))
+        : await getPrimaryCalendarTimezone(oauth);
     const event = await createCalendarEvent(oauth, {
       title: pending.title,
       startsAt: pending.startsAt,
       endsAt,
       timezone,
     });
+    externalEventCreated = true;
 
-    await db
-      .update(aiPendingEvent)
-      .set({
-        status: "accepted",
-        googleEventId: event.id,
-      })
-      .where(
-        and(
-          eq(aiPendingEvent.id, pending.id),
-          eq(aiPendingEvent.userId, session.user.id),
-        ),
-      );
+    await completePendingEvent({
+      id: pending.id,
+      userId: session.user.id,
+      googleEventId: event.id,
+    });
 
     return NextResponse.json({ event });
   } catch (err) {
+    if (!externalEventCreated) {
+      await releasePendingEventClaim({
+        id: pending.id,
+        userId: session.user.id,
+      });
+    }
     console.error("[calendar/events] create failed", err);
     return NextResponse.json(
       { error: "Failed to create calendar event" },
