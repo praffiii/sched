@@ -1,0 +1,60 @@
+# dependencies
+node_modules
+.pnp
+.pnp.*
+.yarn
+
+# Next.js/build outputs
+.next
+out
+build
+coverage
+
+# local env/secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.cer
+*.cert
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.p8
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+master.key
+credentials
+credentials.*
+*credentials*.json
+secrets
+secrets.*
+*secret*.json
+service-account*.json
+
+# git/editor/local tools
+.git
+.gitignore
+Dockerfile
+.dockerignore
+.DS_Store
+.agents
+.claude
+.junie
+.windsurf
+.vercel
+react-doctor-report
+
+# logs/debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# TypeScript cache
+*.tsbuildinfo
