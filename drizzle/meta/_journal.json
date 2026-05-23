@@ -15,6 +15,13 @@
       "when": 1778264037042,
       "tag": "0001_certain_reavers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779530845706,
+      "tag": "0002_app_rate_limit",
+      "breakpoints": true
     }
   ]
 }
