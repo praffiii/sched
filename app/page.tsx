@@ -1,8 +1,15 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/layouts/AppShell";
 import { auth } from "@/lib/auth";
+
+export const metadata: Metadata = {
+  title: "Sched",
+  description:
+    "Talk to your calendar, draft schedule changes, and accept them into Google Calendar.",
+};
 
 export default async function Home() {
   const session = await auth.api.getSession({ headers: await headers() });

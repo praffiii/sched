@@ -21,9 +21,9 @@ export function ChatHeader({ variant, initials, onPointerDown }: ChatHeaderProps
     >
       <div className="flex items-center gap-2">
         {variant === "full" ? (
-          <h1 className="font-display text-3xl font-bold text-ink">Sched</h1>
+          <h1 className="font-display text-3xl font-semibold text-ink">Sched</h1>
         ) : (
-          <span className="font-display text-xl font-bold text-ink">
+          <span className="font-display text-xl font-semibold text-ink">
             ✦ Sched
           </span>
         )}

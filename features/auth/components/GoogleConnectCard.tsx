@@ -24,7 +24,7 @@ export function GoogleConnectCard() {
     <>
       <div className="flex flex-col justify-center gap-6 p-10 md:p-16">
         <SketchBox shadow="card" className="p-8">
-          <h2 className="font-display text-3xl font-bold text-ink">
+          <h2 className="font-display text-3xl font-semibold text-ink">
             Connect to start
           </h2>
 

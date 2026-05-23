@@ -29,8 +29,11 @@ export function MonthGrid({ weeks }: { weeks: { days: Date[] }[] }) {
       </div>
 
       <div className="border-b-2 border-ink">
-        {weeks.map((week, wi) => (
-          <div key={wi} className="grid grid-cols-7">
+        {weeks.map((week) => (
+          <div
+            key={week.days.map((day) => day.toISOString()).join(":")}
+            className="grid grid-cols-7"
+          >
             {week.days.map((day) => {
               const isToday = isSameDay(day, today);
               const eventsForDay = [

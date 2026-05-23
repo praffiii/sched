@@ -35,16 +35,24 @@ export function PermissionPreview({ onCancel, onAllow }: PermissionPreviewProps)
   }, [onCancel]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-4"
-      onClick={onCancel}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-4">
+      <button
+        type="button"
+        aria-label="Close permissions preview"
+        className="absolute inset-0 cursor-default"
+        onClick={onCancel}
+      />
       <SketchBox
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="permission-preview-title"
         shadow="card"
-        className="w-full max-w-md p-7"
-        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-md p-7"
       >
-        <p className="font-display text-2xl font-bold text-ink">
+        <p
+          id="permission-preview-title"
+          className="font-display text-2xl font-semibold text-ink"
+        >
           Sched wants to:
         </p>
 
@@ -54,7 +62,7 @@ export function PermissionPreview({ onCancel, onAllow }: PermissionPreviewProps)
               key={p.title}
               className="flex gap-3 border-b-2 border-dashed border-ink/30 pb-3 last:border-0 last:pb-0"
             >
-              <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-ink bg-yellow text-xs font-bold">
+              <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full border-2 border-ink bg-yellow text-xs font-bold">
                 ✓
               </span>
               <div>

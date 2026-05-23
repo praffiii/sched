@@ -55,14 +55,14 @@ export function CalendarHeader({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-ink bg-paper px-4 py-3">
       <div className="flex items-center gap-3">
-        <h2 className="font-display text-3xl font-bold text-ink">
+        <h2 className="font-display text-3xl font-semibold text-ink">
           {label}
         </h2>
         <div className="flex items-center gap-1">
           <SketchBtn
             aria-label="previous"
             onClick={onPrev}
-            className="h-8 w-8 px-0 text-base"
+            className="size-8 px-0 text-base"
           >
             ◀
           </SketchBtn>
@@ -72,7 +72,7 @@ export function CalendarHeader({
           <SketchBtn
             aria-label="next"
             onClick={onNext}
-            className="h-8 w-8 px-0 text-base"
+            className="size-8 px-0 text-base"
           >
             ▶
           </SketchBtn>
