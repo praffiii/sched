@@ -14,6 +14,11 @@ import {
   listEventsForContext,
 } from "@/lib/google/calendar";
 import { listGoogleTasksForContext } from "@/lib/google/tasks";
+import {
+  enforceRateLimit,
+  GOOGLE_WRITE_RATE_LIMIT,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
 import { normalizeTimezone } from "@/lib/utils/date";
 import type { GCalEvent } from "@/types/events";
 
@@ -62,6 +67,12 @@ export async function POST(req: Request) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rateLimit = await enforceRateLimit({
+    ...GOOGLE_WRITE_RATE_LIMIT,
+    identifier: session.user.id,
+  });
+  if (!rateLimit.allowed) return rateLimitResponse(rateLimit);
 
   let body: { pendingEventId?: unknown; timezone?: unknown };
   let externalEventCreated = false;

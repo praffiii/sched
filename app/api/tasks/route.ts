@@ -8,6 +8,11 @@ import {
 } from "@/lib/ai-pending";
 import { getGoogleOAuthClient } from "@/lib/google/oauth";
 import { createGoogleTask } from "@/lib/google/tasks";
+import {
+  enforceRateLimit,
+  GOOGLE_WRITE_RATE_LIMIT,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
 import type { GCalEvent } from "@/types/events";
 
 export async function POST(req: Request) {
@@ -15,6 +20,12 @@ export async function POST(req: Request) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rateLimit = await enforceRateLimit({
+    ...GOOGLE_WRITE_RATE_LIMIT,
+    identifier: session.user.id,
+  });
+  if (!rateLimit.allowed) return rateLimitResponse(rateLimit);
 
   let body: { pendingEventId?: unknown };
   try {

@@ -18,6 +18,11 @@ import {
 } from "@/features/ai/prompts";
 import { preserveExplicitIndonesianDate } from "@/features/ai/date-correction";
 import { eventSchema, type GeneratedPayload } from "@/features/ai/schema";
+import {
+  AI_GENERATION_RATE_LIMIT,
+  enforceRateLimit,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
 import type { AIPendingEvent, EventKind } from "@/types/events";
 
 const MAX_PROMPT_LENGTH = 2000;
@@ -134,6 +139,12 @@ export async function POST(req: Request) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rateLimit = await enforceRateLimit({
+    ...AI_GENERATION_RATE_LIMIT,
+    identifier: session.user.id,
+  });
+  if (!rateLimit.allowed) return rateLimitResponse(rateLimit);
 
   let body: { prompt?: unknown; timezone?: unknown };
   try {

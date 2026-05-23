@@ -3,6 +3,7 @@ import {
   text,
   timestamp,
   boolean,
+  integer,
   index,
 } from "drizzle-orm/pg-core";
 
@@ -125,4 +126,17 @@ export const aiPendingEvent = pgTable(
     index("ai_pending_event_user_id_idx").on(table.userId),
     index("ai_pending_event_status_idx").on(table.status),
   ],
+);
+
+export const appRateLimit = pgTable(
+  "app_rate_limit",
+  {
+    key: text("key").primaryKey(),
+    count: integer("count").notNull(),
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [index("app_rate_limit_updated_at_idx").on(table.updatedAt)],
 );
