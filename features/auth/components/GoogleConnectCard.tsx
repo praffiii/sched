@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { SketchBox } from "@/components/ui/SketchBox";
@@ -42,8 +43,22 @@ export function GoogleConnectCard() {
             Continue with Google
           </SketchBtn>
 
-          <p className="mt-5 text-xs text-text-muted">
-            We only see events you let us. Sign out anytime.
+          <p className="mt-5 text-xs leading-relaxed text-text-muted">
+            We only see events you let us. By continuing, you agree to the{" "}
+            <Link
+              href="/terms"
+              className="font-semibold text-ink underline decoration-2 underline-offset-4 hover:text-red"
+            >
+              Terms
+            </Link>{" "}
+            and{" "}
+            <Link
+              href="/privacy"
+              className="font-semibold text-ink underline decoration-2 underline-offset-4 hover:text-red"
+            >
+              Privacy Policy
+            </Link>
+            .
           </p>
         </SketchBox>
       </div>
