@@ -16,8 +16,7 @@ export function Toast() {
   }, [toast, clearToast]);
 
   return (
-    <div
-      role="status"
+    <output
       aria-live="polite"
       className={cn(
         "pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 transition-all duration-300",
@@ -29,6 +28,6 @@ export function Toast() {
       <div className="pointer-events-auto rounded-lg border-2 border-ink bg-red px-4 py-2.5 font-hand text-sm font-semibold text-ink shadow-[3px_3px_0_var(--color-ink)]">
         {toast}
       </div>
-    </div>
+    </output>
   );
 }

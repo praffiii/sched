@@ -12,7 +12,7 @@ export function ToggleModeButton() {
     <SketchBtn
       aria-label={isFull ? "minimize chat" : "maximize chat"}
       onClick={() => setUIMode(isFull ? "2D" : "2B")}
-      className="h-8 w-8 px-0 text-base"
+      className="size-8 px-0 text-base"
     >
       {isFull ? "_" : "↑"}
     </SketchBtn>

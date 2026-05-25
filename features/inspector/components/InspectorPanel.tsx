@@ -4,7 +4,7 @@ import { AnnotationLabel } from "@/components/ui/AnnotationLabel";
 import { SketchBtn } from "@/components/ui/SketchBtn";
 import { ChatInput } from "@/features/chat/components/ChatInput";
 import { ChatMessageList } from "@/features/chat/components/ChatMessageList";
-import { zonedLocalDateTimeToIso } from "@/lib/utils/date";
+import { formatLocalIso, zonedLocalDateTimeToIso } from "@/lib/utils/date";
 import { formatTimeRange } from "@/lib/utils/time";
 import { useAppStore } from "@/store/app-store";
 import type { AIPendingEvent, GCalEvent } from "@/types/events";
@@ -22,14 +22,7 @@ function durationHours(startsAt: string, endsAt: string): string {
 }
 
 function calendarDate(iso: string, timezone: string): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date(iso));
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
-  return `${get("year")}-${get("month")}-${get("day")}`;
+  return formatLocalIso(new Date(iso), timezone).slice(0, 10);
 }
 
 function oneHourAfter(iso: string): string {
@@ -92,7 +85,7 @@ export function InspectorPanel() {
           <span className="font-hand text-sm font-semibold text-text-muted">
             Event not found
           </span>
-          <SketchBtn onClick={closeInspector} className="h-8 w-8 p-0 text-sm">
+          <SketchBtn onClick={closeInspector} className="size-8 p-0 text-sm">
             ✕
           </SketchBtn>
         </div>
@@ -111,14 +104,14 @@ export function InspectorPanel() {
             {isPending ? "AI draft · nudge on calendar" : "calendar event · read-only"}
           </p>
         </div>
-        <SketchBtn onClick={closeInspector} className="h-8 w-8 shrink-0 p-0 text-sm">
+        <SketchBtn onClick={closeInspector} className="size-8 shrink-0 p-0 text-sm">
           ✕
         </SketchBtn>
       </div>
 
       <section className="space-y-3 border-b-2 border-ink bg-paper px-4 py-3">
         <div className="space-y-1">
-          <h2 className="font-hand text-lg font-bold leading-tight text-ink">
+          <h2 className="font-hand text-lg font-semibold leading-tight text-ink">
             {event.title}
           </h2>
           {!isTask ? (
@@ -211,7 +204,7 @@ export function InspectorPanel() {
           </div>
         </>
       ) : (
-        <div className="flex-1 px-4 py-4">
+        <div className="flex-1 p-4">
           <p className="rounded-md border-2 border-dashed border-ink/30 bg-paper-warm px-3 py-2 font-hand text-sm text-text-secondary">
             Existing calendar events are read-only for now. Edit AI drafts before confirming them.
           </p>
