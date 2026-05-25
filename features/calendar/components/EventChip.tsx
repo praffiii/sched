@@ -19,11 +19,11 @@ type EventChipProps = {
   totalLanes: number;
   timezone: string;
   onDraftDragStart?: (
-    e: PointerEvent<HTMLDivElement>,
+    e: PointerEvent<HTMLElement>,
     event: AIPendingEvent,
   ) => void;
   onDraftResizeStart?: (
-    e: PointerEvent<HTMLDivElement>,
+    e: PointerEvent<HTMLElement>,
     event: AIPendingEvent,
   ) => void;
   onDraftRename?: (event: AIPendingEvent, title: string) => void;
@@ -47,7 +47,7 @@ export function EventChip({
   const openInspector = useAppStore((s) => s.openInspector);
   const selectedEventId = useAppStore((s) => s.selectedEventId);
   const [editingTitle, setEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(event.title);
+  const [titleDraft, setTitleDraft] = useState("");
   const isSelected = selectedEventId === event.id;
   const canRename = kind === "pending" && isSelected && !!onDraftRename;
   const canMove = kind === "pending" && isSelected && !!onDraftDragStart;
@@ -79,43 +79,30 @@ export function EventChip({
         left: `calc(${leftPct}% + 2px)`,
         width: `calc(${widthPct}% - ${GAP_PX * 2}px)`,
       }}
-      onClick={() => openInspector(event.id)}
-      onPointerDown={(e) => {
-        if (!canMove || editingTitle || !pendingEvent) return;
-        const target = e.target as HTMLElement;
-        if (target.closest("[data-no-drag]")) return;
-        onDraftDragStart?.(e, pendingEvent);
-      }}
       className={cn(
-        "absolute z-10 select-none overflow-hidden rounded-md border-2 border-ink text-left text-[11px] font-bold leading-tight text-ink shadow-[2px_2px_0_var(--color-ink)] transition-transform hover:-translate-y-px active:translate-y-0",
+        "absolute z-10 select-none overflow-hidden text-left text-[11px] font-bold leading-tight text-ink transition-transform hover:-translate-y-px active:translate-y-0",
         canMove ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
-        isCompact ? "px-1.5 py-0.5" : "px-2 py-1",
-        kind === "gcal" && "bg-yellow",
-        kind === "pending" && "hatched-pending border-dashed",
-        isSelected && "z-20 -translate-y-px shadow-[4px_4px_0_var(--color-ink)] ring-2 ring-red",
+        isSelected && "z-20 -translate-y-px",
       )}
     >
-      <div className="flex items-start justify-between gap-1">
-        {editingTitle ? (
-          <input
-            data-no-drag
-            autoFocus
-            value={titleDraft}
-            onChange={(e) => setTitleDraft(e.target.value)}
-            onBlur={commitTitle}
-            onClick={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitTitle();
-              if (e.key === "Escape") {
-                setTitleDraft(event.title);
-                setEditingTitle(false);
-              }
-            }}
-            className="min-w-0 flex-1 rounded border border-ink bg-white px-1 font-hand text-[11px] font-bold text-ink outline-none"
-            aria-label="edit draft title"
-          />
-        ) : (
+      <button
+        type="button"
+        onClick={() => openInspector(event.id)}
+        onPointerDown={(e) => {
+          if (!canMove || editingTitle || !pendingEvent) return;
+          const target = e.target as HTMLElement;
+          if (target.closest("[data-no-drag]")) return;
+          onDraftDragStart?.(e, pendingEvent);
+        }}
+        className={cn(
+          "block h-full w-full overflow-hidden rounded-md border-2 border-ink text-left font-bold leading-tight text-ink shadow-[2px_2px_0_var(--color-ink)] outline-none ring-offset-2 ring-offset-paper transition-transform focus-visible:ring-2 focus-visible:ring-red",
+          isCompact ? "px-1.5 py-0.5" : "px-2 py-1",
+          kind === "gcal" && "bg-yellow",
+          kind === "pending" && "hatched-pending border-dashed",
+          isSelected && "shadow-[4px_4px_0_var(--color-ink)] ring-2 ring-red",
+        )}
+      >
+        <div className="flex items-start justify-between gap-1">
           <span
             data-no-drag={canRename ? true : undefined}
             onDoubleClick={(e) => {
@@ -126,23 +113,46 @@ export function EventChip({
             }}
             className={cn(
               "truncate font-hand",
+              editingTitle && "opacity-0",
               canRename && "cursor-text underline decoration-dotted underline-offset-2",
             )}
             title={canRename ? "Double-click to rename" : undefined}
           >
             {event.title}
           </span>
-        )}
-        {hasConflict ? <ConflictIcon className="shrink-0" /> : null}
-      </div>
-      {!isCompact ? (
-        <div className="mt-0.5 truncate font-hand text-[10px] font-normal text-text-secondary">
-          {formatTimeRange(event.startsAt, event.endsAt, timezone)}
+          {hasConflict ? <ConflictIcon className="shrink-0" /> : null}
         </div>
+        {!isCompact ? (
+          <div className="mt-0.5 truncate font-hand text-[10px] font-normal text-text-secondary">
+            {formatTimeRange(event.startsAt, event.endsAt, timezone)}
+          </div>
+        ) : null}
+      </button>
+      {editingTitle ? (
+        <input
+          data-no-drag
+          autoFocus
+          value={titleDraft}
+          onChange={(e) => setTitleDraft(e.target.value)}
+          onBlur={commitTitle}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitTitle();
+            if (e.key === "Escape") {
+              setTitleDraft(event.title);
+              setEditingTitle(false);
+            }
+          }}
+          className="absolute left-2 right-2 top-1 min-w-0 rounded border border-ink bg-white px-1 font-hand text-[11px] font-bold text-ink outline-none"
+          aria-label="edit draft title"
+        />
       ) : null}
       {canResize ? (
-        <div
+        <button
+          type="button"
           data-no-drag
+          aria-label="Resize draft duration"
           onPointerDown={(e) => {
             if (!pendingEvent) return;
             onDraftResizeStart?.(e, pendingEvent);

@@ -8,14 +8,14 @@ import { cn } from "@/lib/utils/cn";
 import { signOut } from "@/lib/auth-client";
 
 const AVATAR_CLASS =
-  "inline-flex h-8 w-8 select-none items-center justify-center rounded-full border-2 border-ink bg-yellow text-xs font-bold text-ink transition-transform hover:-translate-y-px active:translate-y-0";
+  "inline-flex size-8 select-none items-center justify-center rounded-full border-2 border-ink bg-yellow text-xs font-bold text-ink transition-transform hover:-translate-y-px active:translate-y-0";
 
 type ProfileMenuProps = {
   initials: string;
 };
 
 export function ProfileMenu({ initials }: ProfileMenuProps) {
-  const router = useRouter();
+  const { push, refresh } = useRouter();
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -45,8 +45,8 @@ export function ProfileMenu({ initials }: ProfileMenuProps) {
   const handleSignOut = async () => {
     setPending(true);
     await signOut();
-    router.push("/login");
-    router.refresh();
+    push("/login");
+    refresh();
   };
 
   return (

@@ -40,7 +40,7 @@ export function CalendarSurface() {
   }, [anchor, calendarView]);
 
   const dayGridAnchor = useMemo(
-    () => (calendarView === "day" ? getDayRange(anchor).day : new Date()),
+    () => (calendarView === "day" ? getDayRange(anchor).day : anchor),
     [anchor, calendarView],
   );
 
@@ -68,13 +68,17 @@ export function CalendarSurface() {
     else setCalendarAnchor(shiftWeek(anchor, 1));
   };
 
+  const onToday = () => {
+    setCalendarAnchor(new Date());
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-paper">
       <CalendarHeader
         start={headerRange.start}
         end={headerRange.end}
         onPrev={onPrev}
-        onToday={() => setCalendarAnchor(new Date())}
+        onToday={onToday}
         onNext={onNext}
       />
       {calendarView === "day" ? (

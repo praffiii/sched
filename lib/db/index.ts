@@ -17,5 +17,3 @@ const url = process.env.DATABASE_URL ?? "postgresql://placeholder@localhost:5432
 const queryClient = postgres(url, { prepare: false });
 
 export const db = drizzle(queryClient, { schema });
-
-export { schema };

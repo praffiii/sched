@@ -3,7 +3,7 @@ import { AnnotationLabel } from "@/components/ui/AnnotationLabel";
 export function PitchPanel() {
   return (
     <div className="flex flex-col justify-center gap-10 p-10 md:p-16">
-      <h1 className="font-display text-7xl font-bold leading-none text-ink">
+      <h1 className="font-display text-7xl font-semibold leading-none text-ink">
         Sched
       </h1>
 

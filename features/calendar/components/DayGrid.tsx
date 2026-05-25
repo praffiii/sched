@@ -130,7 +130,7 @@ export function DayGrid({ day }: { day: Date }) {
   };
 
   const startDraftDrag = (
-    e: PointerEvent<HTMLDivElement>,
+    e: PointerEvent<HTMLElement>,
     event: AIPendingEvent,
   ) => {
     if (isUntimedTask(event)) return;
@@ -172,7 +172,7 @@ export function DayGrid({ day }: { day: Date }) {
   };
 
   const startDraftResize = (
-    e: PointerEvent<HTMLDivElement>,
+    e: PointerEvent<HTMLElement>,
     event: AIPendingEvent,
   ) => {
     if (isUntimedTask(event)) return;

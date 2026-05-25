@@ -62,9 +62,40 @@ function writeSavedPos(pos: { x: number; y: number }) {
   }
 }
 
+function getInitialDrawerPos(): { x: number; y: number } | null {
+  if (typeof window === "undefined") return null;
+
+  const saved = readSavedPos();
+  const defaultPos = getDefaultPos();
+  return clampPos(
+    saved?.x ?? defaultPos.x,
+    saved?.y ?? defaultPos.y,
+    window.innerHeight * 0.6,
+  );
+}
+
 export function ChatPanel({ variant, initials }: ChatPanelProps) {
+  if (variant === "drawer") {
+    return <DrawerChatPanel />;
+  }
+
+  return (
+    <div
+      className={cn(
+        "flex min-h-0 flex-col overflow-hidden border-2 border-ink bg-paper",
+        "h-full rounded-none border-y-0 border-l-0",
+      )}
+    >
+      <ChatHeader variant="full" initials={initials} />
+      <ChatMessageList />
+      <ChatInput />
+    </div>
+  );
+}
+
+function DrawerChatPanel() {
   const panelRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const [pos, setPos] = useState(getInitialDrawerPos);
   const dragState = useRef<{
     active: boolean;
     startX: number;
@@ -73,21 +104,8 @@ export function ChatPanel({ variant, initials }: ChatPanelProps) {
     initialY: number;
   }>({ active: false, startX: 0, startY: 0, initialX: 0, initialY: 0 });
 
-  const isDrawer = variant === "drawer";
-
-  // Initialize position on mount
-  useEffect(() => {
-    if (!isDrawer) return;
-    const saved = readSavedPos();
-    const defaultPos = getDefaultPos();
-    const panelHeight = panelRef.current?.getBoundingClientRect().height ??
-      window.innerHeight * 0.6;
-    setPos(clampPos(saved?.x ?? defaultPos.x, saved?.y ?? defaultPos.y, panelHeight));
-  }, [isDrawer]);
-
   // Clamp on resize
   useEffect(() => {
-    if (!isDrawer) return;
     const onResize = () => {
       setPos((prev) => {
         if (!prev) return prev;
@@ -98,11 +116,10 @@ export function ChatPanel({ variant, initials }: ChatPanelProps) {
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, [isDrawer]);
+  }, []);
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (!isDrawer) return;
       const el = panelRef.current;
       if (!el) return;
 
@@ -121,7 +138,7 @@ export function ChatPanel({ variant, initials }: ChatPanelProps) {
         initialY: pos?.y ?? 0,
       };
     },
-    [isDrawer, pos],
+    [pos],
   );
 
   const onPointerMove = useCallback(
@@ -151,9 +168,14 @@ export function ChatPanel({ variant, initials }: ChatPanelProps) {
     });
   }, []);
 
-  const style: React.CSSProperties = isDrawer
-    ? { position: "fixed", left: pos?.x ?? MARGIN, top: pos?.y ?? undefined, bottom: pos ? undefined : MARGIN, zIndex: 20, width: PANEL_WIDTH }
-    : {};
+  const style: React.CSSProperties = {
+    position: "fixed",
+    left: pos?.x ?? MARGIN,
+    top: pos?.y ?? undefined,
+    bottom: pos ? undefined : MARGIN,
+    zIndex: 20,
+    width: PANEL_WIDTH,
+  };
 
   return (
     <div
@@ -161,17 +183,14 @@ export function ChatPanel({ variant, initials }: ChatPanelProps) {
       style={style}
       className={cn(
         "flex min-h-0 flex-col overflow-hidden border-2 border-ink bg-paper",
-        variant === "full"
-          ? "h-full rounded-none border-y-0 border-l-0"
-          : "h-[60vh] rounded-lg shadow-[6px_6px_0_var(--color-ink)]",
+        "h-[60vh] rounded-lg shadow-[6px_6px_0_var(--color-ink)]",
       )}
-      onPointerMove={isDrawer ? onPointerMove : undefined}
-      onPointerUp={isDrawer ? onPointerUp : undefined}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
     >
       <ChatHeader
-        variant={variant}
-        initials={initials}
-        onPointerDown={isDrawer ? onPointerDown : undefined}
+        variant="drawer"
+        onPointerDown={onPointerDown}
       />
       <ChatMessageList />
       <ChatInput />

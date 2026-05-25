@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, type PointerEvent } from "react";
 import { cn } from "@/lib/utils/cn";
 import { zonedLocalDateTimeToIso } from "@/lib/utils/date";
 import { useAppStore } from "@/store/app-store";
-import type { AIPendingEvent } from "@/types/events";
+import type { AIPendingEvent, GCalEvent } from "@/types/events";
 
 import {
   assignLanes,
@@ -29,6 +29,12 @@ const MIN_DURATION_MINUTES = 15;
 type WeekGridProps = {
   days: Date[];
 };
+
+type CalendarGridEvent = GCalEvent | AIPendingEvent;
+type DraftPointerHandler = (
+  e: PointerEvent<HTMLElement>,
+  event: AIPendingEvent,
+) => void;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -58,6 +64,168 @@ function eventDurationMinutes(event: AIPendingEvent): number {
     (new Date(event.endsAt).getTime() - new Date(event.startsAt).getTime()) /
     60000;
   return Math.max(MIN_DURATION_MINUTES, Math.round(duration));
+}
+
+function WeekHeader({ days, today }: { days: Date[]; today: Date }) {
+  return (
+    <div className="sticky top-0 z-20 grid grid-cols-[48px_repeat(7,minmax(0,1fr))] border-b-2 border-ink bg-paper-warm">
+      <div className="border-r-2 border-ink" />
+      {days.map((d) => {
+        const isToday = isSameDay(d, today);
+        return (
+          <div
+            key={d.toISOString()}
+            className={cn(
+              "flex flex-col items-center justify-center border-l-2 border-ink py-2",
+              isToday && "bg-yellow/40",
+            )}
+          >
+            <span className="font-hand text-xs uppercase tracking-wide text-text-secondary">
+              {getWeekday(d)}
+            </span>
+            <span className="font-display text-2xl font-bold text-ink">
+              {d.getDate()}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function HourLabels() {
+  return (
+    <div className="relative border-r-2 border-ink">
+      {HOURS.map((h) => (
+        <div
+          key={h}
+          className="absolute right-1 -translate-y-1/2 font-hand text-[10px] text-text-muted"
+          style={{ top: TOP_TASKS_HEIGHT_PX + h * HOUR_HEIGHT_PX }}
+        >
+          {h === 0 ? "" : `${h}:00`}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type DayColumnProps = {
+  day: Date;
+  today: Date;
+  calendarEvents: GCalEvent[];
+  aiPendingEvents: AIPendingEvent[];
+  calendarTimezone: string;
+  conflicts: Set<string>;
+  onDraftDragStart: DraftPointerHandler;
+  onDraftResizeStart: DraftPointerHandler;
+  onDraftRename: (event: AIPendingEvent, title: string) => void;
+};
+
+function isPendingEvent(event: CalendarGridEvent): event is AIPendingEvent {
+  return "status" in event && event.status === "pending";
+}
+
+function DayColumn({
+  day,
+  today,
+  calendarEvents,
+  aiPendingEvents,
+  calendarTimezone,
+  conflicts,
+  onDraftDragStart,
+  onDraftResizeStart,
+  onDraftRename,
+}: DayColumnProps) {
+  const gcalForDay = eventsOnDay(calendarEvents, day, calendarTimezone);
+  const pendingForDay = eventsOnDay(aiPendingEvents, day, calendarTimezone);
+  const topTasks = [...gcalForDay, ...pendingForDay].filter(isUntimedTask);
+  const timedGcalForDay = gcalForDay.filter((event) => !isUntimedTask(event));
+  const timedPendingForDay = pendingForDay.filter(
+    (event) => !isUntimedTask(event),
+  );
+  const allForDay = [...timedGcalForDay, ...timedPendingForDay];
+  const lanes = assignLanes(allForDay);
+  const isToday = isSameDay(day, today);
+
+  return (
+    <div
+      className={cn(
+        "relative border-l-2 border-ink",
+        isToday && "bg-yellow/10",
+      )}
+    >
+      {HOURS.map((h) => (
+        <div
+          key={h}
+          className="absolute inset-x-0 border-t border-ink/10"
+          style={{ top: TOP_TASKS_HEIGHT_PX + h * HOUR_HEIGHT_PX }}
+        />
+      ))}
+
+      {topTasks.map((event, index) => {
+        const isPending = isPendingEvent(event);
+        return (
+          <EventChip
+            key={event.id}
+            event={event}
+            kind={isPending ? "pending" : "gcal"}
+            hasConflict={false}
+            top={4 + index * 20}
+            height={18}
+            lane={0}
+            totalLanes={1}
+            timezone={calendarTimezone}
+            onDraftRename={isPending ? onDraftRename : undefined}
+          />
+        );
+      })}
+
+      {timedGcalForDay.map((event) => {
+        const { top, height } = eventToPosition(
+          event,
+          zonedClockDate(event.startsAt, calendarTimezone),
+        );
+        const lane = lanes.get(event.id) ?? { lane: 0, totalLanes: 1 };
+        return (
+          <EventChip
+            key={event.id}
+            event={event}
+            kind="gcal"
+            hasConflict={conflicts.has(event.id)}
+            top={TOP_TASKS_HEIGHT_PX + top}
+            height={height}
+            lane={lane.lane}
+            totalLanes={lane.totalLanes}
+            timezone={calendarTimezone}
+          />
+        );
+      })}
+
+      {timedPendingForDay.map((event) => {
+        const { top, height } = eventToPosition(
+          event,
+          zonedClockDate(event.startsAt, calendarTimezone),
+        );
+        const lane = lanes.get(event.id) ?? { lane: 0, totalLanes: 1 };
+        return (
+          <EventChip
+            key={event.id}
+            event={event}
+            kind="pending"
+            hasConflict={conflicts.has(event.id)}
+            top={TOP_TASKS_HEIGHT_PX + top}
+            height={height}
+            lane={lane.lane}
+            totalLanes={lane.totalLanes}
+            timezone={calendarTimezone}
+            onDraftDragStart={onDraftDragStart}
+            onDraftResizeStart={onDraftResizeStart}
+            onDraftRename={onDraftRename}
+          />
+        );
+      })}
+    </div>
+  );
 }
 
 export function WeekGrid({ days }: WeekGridProps) {
@@ -157,7 +325,7 @@ export function WeekGrid({ days }: WeekGridProps) {
   };
 
   const startDraftDrag = (
-    e: PointerEvent<HTMLDivElement>,
+    e: PointerEvent<HTMLElement>,
     event: AIPendingEvent,
   ) => {
     if (isUntimedTask(event)) return;
@@ -199,7 +367,7 @@ export function WeekGrid({ days }: WeekGridProps) {
   };
 
   const startDraftResize = (
-    e: PointerEvent<HTMLDivElement>,
+    e: PointerEvent<HTMLElement>,
     event: AIPendingEvent,
   ) => {
     if (isUntimedTask(event)) return;
@@ -257,144 +425,29 @@ export function WeekGrid({ days }: WeekGridProps) {
     >
       {/* Sticky day header — shares the same scroll container so column widths
           stay perfectly aligned with the body grid below. */}
-      <div className="sticky top-0 z-20 grid grid-cols-[48px_repeat(7,minmax(0,1fr))] border-b-2 border-ink bg-paper-warm">
-        <div className="border-r-2 border-ink" />
-        {days.map((d) => {
-          const isToday = isSameDay(d, today);
-          return (
-            <div
-              key={d.toISOString()}
-              className={cn(
-                "flex flex-col items-center justify-center border-l-2 border-ink py-2",
-                isToday && "bg-yellow/40",
-              )}
-            >
-              <span className="font-hand text-xs uppercase tracking-wide text-text-secondary">
-                {getWeekday(d)}
-              </span>
-              <span className="font-display text-2xl font-bold text-ink">
-                {d.getDate()}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+      <WeekHeader days={days} today={today} />
 
       <div
         ref={bodyRef}
         className="relative grid grid-cols-[48px_repeat(7,minmax(0,1fr))]"
         style={{ height: TOP_TASKS_HEIGHT_PX + HOUR_HEIGHT_PX * 24 }}
       >
-        {/* Hour labels column */}
-        <div className="relative border-r-2 border-ink">
-          {HOURS.map((h) => (
-            <div
-              key={h}
-              className="absolute right-1 -translate-y-1/2 font-hand text-[10px] text-text-muted"
-              style={{ top: TOP_TASKS_HEIGHT_PX + h * HOUR_HEIGHT_PX }}
-            >
-              {h === 0 ? "" : `${h}:00`}
-            </div>
-          ))}
-        </div>
+        <HourLabels />
 
-        {/* Day columns */}
         {days.map((d) => {
-          const gcalForDay = eventsOnDay(calendarEvents, d, calendarTimezone);
-          const pendingForDay = eventsOnDay(
-            aiPendingEvents,
-            d,
-            calendarTimezone,
-          );
-          const topTasks = [...gcalForDay, ...pendingForDay].filter(isUntimedTask);
-          const timedGcalForDay = gcalForDay.filter((event) => !isUntimedTask(event));
-          const timedPendingForDay = pendingForDay.filter(
-            (event) => !isUntimedTask(event),
-          );
-          const allForDay = [...timedGcalForDay, ...timedPendingForDay];
-          const lanes = assignLanes(allForDay);
-          const isToday = isSameDay(d, today);
-
           return (
-            <div
+            <DayColumn
               key={d.toISOString()}
-              className={cn(
-                "relative border-l-2 border-ink",
-                isToday && "bg-yellow/10",
-              )}
-            >
-              {/* Hour gridlines */}
-              {HOURS.map((h) => (
-                <div
-                  key={h}
-                  className="absolute inset-x-0 border-t border-ink/10"
-                  style={{ top: TOP_TASKS_HEIGHT_PX + h * HOUR_HEIGHT_PX }}
-                />
-              ))}
-
-              {topTasks.map((event, index) => {
-                const isPending = "status" in event && event.status === "pending";
-                return (
-                  <EventChip
-                    key={event.id}
-                    event={event}
-                    kind={isPending ? "pending" : "gcal"}
-                    hasConflict={false}
-                    top={4 + index * 20}
-                    height={18}
-                    lane={0}
-                    totalLanes={1}
-                    timezone={calendarTimezone}
-                    onDraftRename={isPending ? renameDraft : undefined}
-                  />
-                );
-              })}
-
-              {timedGcalForDay.map((event) => {
-                const { top, height } = eventToPosition(
-                  event,
-                  zonedClockDate(event.startsAt, calendarTimezone),
-                );
-                const lane = lanes.get(event.id) ?? { lane: 0, totalLanes: 1 };
-                return (
-                  <EventChip
-                    key={event.id}
-                    event={event}
-                    kind="gcal"
-                    hasConflict={conflicts.has(event.id)}
-                    top={TOP_TASKS_HEIGHT_PX + top}
-                    height={height}
-                    lane={lane.lane}
-                    totalLanes={lane.totalLanes}
-                    timezone={calendarTimezone}
-                  />
-                );
-              })}
-
-              {timedPendingForDay.map((event) => {
-                const { top, height } = eventToPosition(
-                  event,
-                  zonedClockDate(event.startsAt, calendarTimezone),
-                );
-                const lane = lanes.get(event.id) ?? { lane: 0, totalLanes: 1 };
-                return (
-                  <EventChip
-                    key={event.id}
-                    event={event}
-                    kind="pending"
-                    hasConflict={conflicts.has(event.id)}
-                    top={TOP_TASKS_HEIGHT_PX + top}
-                    height={height}
-                    lane={lane.lane}
-                    totalLanes={lane.totalLanes}
-                    timezone={calendarTimezone}
-                    onDraftDragStart={startDraftDrag}
-                    onDraftResizeStart={startDraftResize}
-                    onDraftRename={renameDraft}
-                  />
-                );
-              })}
-            </div>
+              day={d}
+              today={today}
+              calendarEvents={calendarEvents}
+              aiPendingEvents={aiPendingEvents}
+              calendarTimezone={calendarTimezone}
+              conflicts={conflicts}
+              onDraftDragStart={startDraftDrag}
+              onDraftResizeStart={startDraftResize}
+              onDraftRename={renameDraft}
+            />
           );
         })}
       </div>

@@ -13,6 +13,11 @@ import {
   getPrimaryCalendarTimezone,
   listEventsForContext,
 } from "@/lib/google/calendar";
+import {
+  AI_GENERATION_RATE_LIMIT,
+  enforceRateLimit,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
 import { formatLocalIso, normalizeTimezone } from "@/lib/utils/date";
 import type { AIPendingEvent, EventKind } from "@/types/events";
 
@@ -122,6 +127,12 @@ export async function POST(req: Request, ctx: RouteContext) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rateLimit = await enforceRateLimit({
+    ...AI_GENERATION_RATE_LIMIT,
+    identifier: session.user.id,
+  });
+  if (!rateLimit.allowed) return rateLimitResponse(rateLimit);
 
   let body: { instruction?: unknown; timezone?: unknown };
   try {
