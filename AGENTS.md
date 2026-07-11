@@ -135,6 +135,24 @@ Single service: the Next.js app (App Router + API route handlers). Run it in dev
 - Run with `node --experimental-strip-types --test tests/*.test.mjs`. The flag is required: several `.test.mjs` files import `.ts` modules directly, and Node 22 (this VM) only strips TS types behind that flag (it is on by default only on Node 23.6+). The bare `node --test tests/*.test.mjs` from the README fails on `.ts` imports here.
 - Tests are content/behavior assertions and do NOT need the database running.
 
-### Secrets required for the full product flow (not configured here)
+### Secrets & Google OAuth (full E2E flow)
 
-The core flow (Google login → prompt → Gemini drafts → accept into Google Calendar/Tasks) is entirely gated behind Google OAuth and Gemini. Without these secrets you can only exercise the login page, the health endpoint, tests, lint, typecheck, and build. To run the end-to-end flow, set real values in `.env.local`: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (OAuth redirect URI `http://localhost:3000/api/auth/callback/google`) and `GEMINI_API_KEY`, plus a Google test account to log in with.
+Cloud-injected secrets (`GEMINI_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`) land in the **shell environment**, not automatically in `.env.local`. Next.js dev reads `.env.local` only — after secrets are added, sync them into `.env.local` and **restart `pnpm dev`**.
+
+The core flow (Google login → prompt → Gemini drafts → accept into Google Calendar/Tasks) requires all three secrets plus a Google test account. `GEMINI_API_KEY` can be smoke-tested independently (see `lib/gemini.ts`).
+
+**OAuth redirect URI (common E2E blocker):** Better Auth sends exactly:
+
+```txt
+http://localhost:3000/api/auth/callback/google
+```
+
+This must be listed under **Authorized redirect URIs** on the **same** OAuth 2.0 Web client whose Client ID matches `GOOGLE_CLIENT_ID`. A `400 redirect_uri_mismatch` from Google means the console entry is missing, typo'd, or belongs to a different client. Confirm the live URI with:
+
+```bash
+curl -s -X POST http://localhost:3000/api/auth/sign-in/social \
+  -H "Content-Type: application/json" \
+  -d '{"provider":"google","callbackURL":"/"}' | python3 -c "import sys,json,urllib.parse; u=json.load(sys.stdin)['url']; print(dict(urllib.parse.parse_qsl(urllib.parse.urlparse(u).query))['redirect_uri'])"
+```
+
+Expected output: `http://localhost:3000/api/auth/callback/google`
