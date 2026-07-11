@@ -111,3 +111,30 @@ If unsure about current API/syntax for any library above, use **Context7 MCP** (
 - `/.docs/design-system.md` — Colors, typography, components, CSS variables, paper texture
 - `/.docs/design-flow.md` — Screen flows, UI states (2B / 2D / inspector), state architecture
 - `/.docs/prompts.md` — Gemini system prompt, user message template, few-shot test cases, failure modes
+
+---
+
+## Cursor Cloud specific instructions
+
+Durable, non-obvious notes for future cloud agents. Standard commands live in `README.md` / `package.json` scripts — use those; only the caveats below are non-obvious.
+
+### Services & how to run them
+
+Single service: the Next.js app (App Router + API route handlers). Run it in dev with `pnpm dev` (Turbopack, port 3000). Standard scripts are in `package.json` (`lint`, `typecheck`, `build`, `db:*`).
+
+### Local Postgres (dev DB)
+
+- There is no managed Supabase DB in the cloud VM. A local PostgreSQL 16 cluster stands in for it, and `.env.local` points `DATABASE_URL` at `postgresql://postgres:postgres@127.0.0.1:5432/sched`.
+- Postgres is NOT auto-started on boot. Start it each session before running the app or migrations: `sudo pg_ctlcluster 16 main start`.
+- `.env.local` is gitignored and persists via the VM snapshot (not the update script). If it is ever missing, recreate it with the local `DATABASE_URL` above plus a `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL=http://localhost:3000`.
+- `drizzle-kit` does NOT read `.env.local`. Migration commands need `DATABASE_URL` exported inline, e.g. `DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/sched pnpm db:migrate`. `next dev` DOES load `.env.local` automatically.
+- Verify DB + app wiring end-to-end with `curl localhost:3000/api/health` → expect `{"status":"ok","db":"ok",...}`.
+
+### Tests
+
+- Run with `node --experimental-strip-types --test tests/*.test.mjs`. The flag is required: several `.test.mjs` files import `.ts` modules directly, and Node 22 (this VM) only strips TS types behind that flag (it is on by default only on Node 23.6+). The bare `node --test tests/*.test.mjs` from the README fails on `.ts` imports here.
+- Tests are content/behavior assertions and do NOT need the database running.
+
+### Secrets required for the full product flow (not configured here)
+
+The core flow (Google login → prompt → Gemini drafts → accept into Google Calendar/Tasks) is entirely gated behind Google OAuth and Gemini. Without these secrets you can only exercise the login page, the health endpoint, tests, lint, typecheck, and build. To run the end-to-end flow, set real values in `.env.local`: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (OAuth redirect URI `http://localhost:3000/api/auth/callback/google`) and `GEMINI_API_KEY`, plus a Google test account to log in with.
