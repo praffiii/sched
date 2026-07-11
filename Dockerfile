@@ -31,4 +31,7 @@ COPY --from=builder /app/node_modules ./node_modules
 
 EXPOSE 8080
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD wget -qO- http://localhost:8080/api/health || exit 1
+
 CMD ["sh", "-c", "pnpm exec next start -H 0.0.0.0 -p ${PORT:-8080}"]
