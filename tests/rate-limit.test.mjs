@@ -100,3 +100,14 @@ test("expensive authenticated routes enforce per-user rate limits", () => {
   assertRouteIsLimited("app/api/calendar/events/route.ts", "GOOGLE_WRITE_RATE_LIMIT");
   assertRouteIsLimited("app/api/tasks/route.ts", "GOOGLE_WRITE_RATE_LIMIT");
 });
+
+test("rate-limit module prunes stale rows opportunistically", () => {
+  const source = readRequired("lib/rate-limit.ts");
+
+  assert.match(source, /export async function pruneExpiredRateLimits/);
+  assert.match(source, /RATE_LIMIT_RETENTION_MS/);
+  assert.match(source, /RATE_LIMIT_PRUNE_PROBABILITY/);
+  assert.match(source, /lt\(appRateLimit\.updatedAt/);
+  assert.match(source, /Math\.random\(\) < RATE_LIMIT_PRUNE_PROBABILITY/);
+  assert.match(source, /await pruneExpiredRateLimits\(\)/);
+});
