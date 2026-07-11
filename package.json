@@ -8,6 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"
@@ -26,6 +29,7 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/pg": "^8.20.0",

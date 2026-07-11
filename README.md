@@ -173,10 +173,16 @@ pnpm db:migrate   # run Drizzle migrations
 pnpm db:studio    # open Drizzle Studio
 ```
 
-Run tests:
+Run unit/content tests:
 
 ```bash
-node --test tests/*.test.mjs
+pnpm test
+```
+
+Run Playwright end-to-end tests (starts Next.js automatically; needs Postgres + `.env.local`):
+
+```bash
+pnpm test:e2e
 ```
 
 ## Project docs
