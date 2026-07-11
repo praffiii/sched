@@ -7,12 +7,20 @@ test.describe("legal pages", () => {
     await expect(
       page.getByRole("heading", { name: "Privacy Policy" }),
     ).toBeVisible();
-    await expect(page.getByText("Google login")).toBeVisible();
     await expect(
-      page.getByText("Google Calendar and Google Tasks access"),
+      page.getByRole("heading", { name: "Google login" }),
     ).toBeVisible();
-    await expect(page.getByText("AI scheduling")).toBeVisible();
-    await expect(page.getByText("Data storage")).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: "Google Calendar and Google Tasks access",
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "AI scheduling" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Data storage" }),
+    ).toBeVisible();
   });
 
   test("terms of service renders account and AI terms", async ({ page }) => {
@@ -21,10 +29,16 @@ test.describe("legal pages", () => {
     await expect(
       page.getByRole("heading", { name: "Terms of Service" }),
     ).toBeVisible();
-    await expect(page.getByText("Google account and permissions")).toBeVisible();
-    await expect(page.getByText("AI scheduling")).toBeVisible();
     await expect(
-      page.getByText("Google Calendar and Google Tasks changes"),
+      page.getByRole("heading", { name: "Google account and permissions" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "AI scheduling" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: "Google Calendar and Google Tasks changes",
+      }),
     ).toBeVisible();
   });
 
