@@ -65,6 +65,7 @@ yarn-error.log*
 .claude/
 .junie/
 .windsurf/
+.superpowers/
 react-doctor.config.json
 react-doctor-report/
 
