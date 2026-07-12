@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 
 import { eventSchema, type GeneratedPayload } from "@/features/ai/schema";
 import { SYSTEM_PROMPT } from "@/features/ai/prompts";
-import { genAI } from "@/lib/gemini";
+import { GEMINI_MODEL, genAI } from "@/lib/gemini";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { aiPendingEvent, chatMessage } from "@/lib/db/schema";
@@ -69,7 +69,7 @@ function isTransientGeminiError(err: unknown): boolean {
 async function generateRefinement(userMessage: string) {
   try {
     return await genAI.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: GEMINI_MODEL,
       contents: userMessage,
       config: {
         systemInstruction: REFINE_SYSTEM_PROMPT,
@@ -81,7 +81,7 @@ async function generateRefinement(userMessage: string) {
     if (!isTransientGeminiError(err)) throw err;
     await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
     return await genAI.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: GEMINI_MODEL,
       contents: userMessage,
       config: {
         systemInstruction: REFINE_SYSTEM_PROMPT,
