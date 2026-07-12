@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { genAI } from "@/lib/gemini";
+import { GEMINI_MODEL, genAI } from "@/lib/gemini";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { aiPendingEvent, chatMessage } from "@/lib/db/schema";
@@ -111,7 +111,7 @@ function fixContradictoryDate(
 async function generateWithRetry(userMessage: string) {
   try {
     return await genAI.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: GEMINI_MODEL,
       contents: userMessage,
       config: {
         systemInstruction: SYSTEM_PROMPT,
@@ -123,7 +123,7 @@ async function generateWithRetry(userMessage: string) {
     if (!isTransientGeminiError(err)) throw err;
     await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
     return await genAI.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: GEMINI_MODEL,
       contents: userMessage,
       config: {
         systemInstruction: SYSTEM_PROMPT,
